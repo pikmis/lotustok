@@ -39,7 +39,7 @@ final class Diagnostics {
 
     static String fullReport() {
         StringBuilder out = new StringBuilder();
-        out.append("== MargyT full report ==\n");
+        out.append("== LotusTok full report ==\n");
         out.append("time: ").append(new java.text.SimpleDateFormat(
                 "yyyy-MM-dd HH:mm:ss Z", java.util.Locale.US).format(new java.util.Date()))
                 .append('\n');
@@ -109,7 +109,7 @@ final class Diagnostics {
 
     static String report() {
         StringBuilder out = new StringBuilder();
-        out.append("MargyT ").append(Version.MOD)
+        out.append("LotusTok ").append(Version.MOD)
                 .append(" / TikTok ").append(Version.TIKTOK).append('\n');
         boolean startup = false, activityWatch = false, hookFailure = false;
         for (String line : Diary.lines()) {

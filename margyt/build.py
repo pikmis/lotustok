@@ -16,11 +16,11 @@ import re
 import time
 from typing import Dict, List, Optional
 
-from . import accent as accent_module, artwork, prerecolour, dexcache, dexpatch, icon as icon_module, manifest as manifest_module, nightly, resadd, widget
+from . import accent as accent_module, artwork, bloom, prerecolour, dexcache, dexpatch, icon as icon_module, manifest as manifest_module, nightly, petals, resadd, widget
 from .apkzip import Apk, STORED
 from .arsc import Arsc
 from . import axml as axml_module
-from .axml import Axml
+from .axml import Axml, RES_XML_START_ELEMENT
 from .toolchain import Toolchain
 
 PACKAGE = "cat.narezany.margyt"
@@ -52,12 +52,12 @@ ALARM_ACTIONS = [
 # builds the list -- but the screen has to still be called this for the mod to
 # recognise it, so the build checks rather than hopes.
 TIKTOK_SETTINGS = "com.ss.android.ugc.aweme.setting.ui.SettingContainerActivity"
-LABEL = "MargyT"
+LABEL = "LotusTok"
 
 # The screen has no launcher entry of its own -- it is opened from the row in
 # TikTok's settings -- but an activity still wants a label: it is what the
 # recents card and any "open with" list show.
-SETTINGS_LABEL = "MargyT settings"
+SETTINGS_LABEL = "LotusTok settings"
 SETTINGS_THEME = "Theme_DeviceDefault_Light_NoActionBar"
 
 # what a renamed provider authority ends in, so two mods of the same app can
@@ -147,6 +147,7 @@ class Build:
         self.key_password = key_password
         self.test = test
         self.lite = False
+        self.lenient = False
         self.accent = dexpatch.TIKTOK_PINK if accent is None else accent
         self.started = time.time()
         self.patched_dex_count = 0
@@ -201,7 +202,16 @@ class Build:
         self.write_baked_colour(moved)
         self.write_emblem()
         self.write_icons()
-        self.write_version(manifest_module.version_name(manifest), self.test)
+        version = manifest_module.version_name(manifest)
+        self.lenient = bool(os.environ.get("MARGYT_LENIENT")) or (
+            not self.lite and version != dexpatch.SUPPORTED_TIKTOK)
+        if self.lenient:
+            # the hooks are written against one release; on another, those that
+            # do not match are left out and listed, instead of refusing to build
+            os.environ["MARGYT_LENIENT"] = "1"
+            self.detail("WARNING: this is TikTok %s, the hooks are written for %s: hooks that "
+                        "do not match are skipped and listed below" % (version, dexpatch.SUPPORTED_TIKTOK))
+        self.write_version(version, self.test)
         self.find_anchors(apk)
         self.write_theme(arsc)
         self.write_shots(manifest)
@@ -289,9 +299,14 @@ class Build:
         self.say("Icons to choose from")
         extended = self.add_icon_choices(apk, arsc, manifest)
         extended = self.add_widget(apk, extended, manifest)
+        extended = self.add_petals(apk, extended)
         self.add_assets(apk)
         self.add_prerecoloured(apk)
 
+        # a new version code makes the launcher read the icons again: it keeps
+        # the picture it drew for an install with the same code, so a rebuild
+        # with new icons over the old one would still show the old ones
+        manifest_module.set_version_code(manifest, manifest_module.version_code(manifest) + 1)
         apk.replace("AndroidManifest.xml", manifest.build())
         if extended is not None:
             apk.replace("resources.arsc", extended, STORED)
@@ -605,25 +620,8 @@ class Build:
 
     #: what ships, in the order the settings show them
     ICONS = [
-        ("grafiti", "Графити"),
-        ("shine", "Блестящий"),
-        ("tiktok", "Косплей на ТикТок"),
-        ("materialyou", "Margyrial You"),
-        ("material3", "Margyrial 3"),
-        ("doodle", "Doodle"),
-        ("glitch", "Глитч"),
-        ("google", "Google"),
-        ("dotted", "Точечная"),
-        ("terminal", "Терминал"),
-        ("yaai", "You are an idiot!"),
-        ("deltamargyt", "Deltamargyt"),
-        ("mteam", "Mteam"),
-        ("deled", "сиводня йа нарисават картино"),
-        ("margytcraft", "MargyTcraft"),
-        ("tigr", "айй тигрр"),
-        ("govno", "че за говно"),
-        ("glamour", "Гламурная"),
-        ("tilcayo", "Толстый тилкайо"),
+        ("lotustok", "Обычная"),
+        (bloom.KEY, bloom.LABEL),
     ]
 
     ICON_PACKAGE = 0x30
@@ -698,11 +696,43 @@ class Build:
         self.detail("%d icons added to the resource table as package 0x%02X"
                     % (len(names), self.ICON_PACKAGE))
 
+        # LotusTok's own icon is TikTok's own icon resource, redrawn in place: it is
+        # adaptive with a monochrome layer for themed icons, and an id of the app's
+        # own package, which every launcher reads (an id of a package of our own
+        # draws fine but is not tinted by some of them)
+        icon_res = {}
+        for index, (key, _name) in enumerate(self.ICONS):
+            icon_res[index] = (self.ICON_PACKAGE << 24) | (1 << 16) | index
+        own = manifest_module.icon_ids(manifest)
+        if own:
+            icon_res[0] = own[0]
+        apk.add(bloom.BACKGROUND_PATH, bloom.background())
+        apk.add(bloom.FOREGROUND_PATH, bloom.foreground())
+        extended = resadd.add_files(extended, bloom.LAYERS, "drawable",
+                                    [("bloom_bg", bloom.BACKGROUND_PATH), ("bloom_fg", bloom.FOREGROUND_PATH)],
+                                    "margyt.bloom")
+        with open(os.path.join(self.root, bloom.PICTURE), "rb") as handle:
+            apk.add(bloom.ICON_PNG, handle.read())
+        apk.add(bloom.ICON_XML, bloom.adaptive())
+        extended = resadd.add_adaptive_icons(extended, bloom.ICON, [("bloom", bloom.ICON_PNG, bloom.ICON_XML)],
+                                             "margyt.bloomicon", sdk=bloom.SDK)
+        for index, (key, _name) in enumerate(self.ICONS):
+            if key == bloom.KEY:
+                icon_res[index] = bloom.ICON_ID
+        self.detail("the bloom icon added: layers 0x%08X, 0x%08X; icon 0x%08X"
+                    % (bloom.BACKGROUND_ID, bloom.FOREGROUND_ID, bloom.ICON_ID))
+
+        # LotusTok's own icon is the one the home screen shows from the start:
+        # its alias is on, and TikTok's entry is switched off in the manifest
+        # (the runtime switcher does the same once another icon is chosen)
         for index, (key, name) in enumerate(self.ICONS):
-            res_id = (self.ICON_PACKAGE << 24) | (1 << 16) | index
+            res_id = icon_res[index]
             manifest_module.add_icon_alias(
                 manifest, "%s%d" % (self.ICON_ALIAS, index), target, res_id,
-                label, enabled=False)
+                label, enabled=(index == 0))
+        for node in manifest_module.launcher_elements(manifest):
+            if manifest.attr_string(node, "name") == entry:
+                manifest.set_attr_bool(node, "enabled", False)
         self.detail("%d launcher entries declared, all off but %s"
                     % (len(self.ICONS), entry.rsplit(".", 1)[-1]))
         return extended
@@ -719,6 +749,14 @@ class Build:
                                  [("margyt_widget_info", widget.XML_PATH)], "margyt.xml")
         manifest_module.add_widget(manifest, self.WIDGET, widget.XML_ID)
         self.detail("a home-screen widget declared, its layout 0x%08X" % widget.LAYOUT_ID)
+        return table
+
+    def add_petals(self, apk: Apk, table: bytes) -> bytes:
+        """The icon of the MargyT row in TikTok's settings: a vector of ours, in a package of ours."""
+        apk.add(petals.PATH_IN_APK, petals.xml())
+        table = resadd.add_files(table, petals.PACKAGE, "drawable",
+                                 [(petals.NAME, petals.PATH_IN_APK)], "margyt.drawable")
+        self.detail("the petals icon added to the resource table as 0x%08X" % petals.ID)
         return table
 
     def find_anchors(self, apk: Apk) -> None:
@@ -885,6 +923,9 @@ class Build:
             )
         self.detail("%d telephony call sites, %d places the accent colour was written "
                     "down, %d rewrites in all" % (calls, pink, total))
+        from . import extra
+        extra.apply(apk.names(), apk.read, apk.replace, dexpatch.Smali(self.tools.smali, api),
+                    os.path.join(self.workspace, "patch"), self.detail)
         self.patched_dex_count = patched_dex_count
         self.rewrite_count = total
         if self.lite:
@@ -907,15 +948,23 @@ class Build:
         if feature_hits["native right-area slots"]<4 and "native right-area slots" not in missing:
             missing.append("native right-area slots (need all four)")
         if missing:
-            raise RuntimeError("Required feature hooks did not match: "+", ".join(missing)
-                               +". This APK is unsupported; no silent feature omissions.")
+            if self.lenient:
+                self.detail("WARNING: hooks that did not match, so these features are OFF in this build: "
+                            +", ".join(missing))
+            else:
+                raise RuntimeError("Required feature hooks did not match: "+", ".join(missing)
+                                   +". This APK is unsupported; no silent feature omissions.")
         self.detail("Feature hooks: "+", ".join("%s x%d"%item for item in feature_hits.items()))
-        if not like_hooks:
+        if not like_hooks and self.lenient:
+            self.detail("WARNING: the feed-like animation entry did not match: heart animation unchanged")
+        elif not like_hooks:
             raise RuntimeError(
                 "TikTok's feed-like animation entry did not match: this build "
                 "would leave the heart animation unchanged"
             )
-        if not speed_lock or not edge_speed_lock:
+        if (not speed_lock or not edge_speed_lock) and self.lenient:
+            self.detail("WARNING: the feed touch listener did not match: the hold-speed rate will not apply")
+        elif not speed_lock or not edge_speed_lock:
             raise RuntimeError(
                 "TikTok's feed touch listener did not match: the hold speed the "
                 "mod lets people choose would never be applied"

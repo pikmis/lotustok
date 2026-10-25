@@ -111,6 +111,34 @@ final class Local {
         add("Выбрать",
                 "Вибрати",
                 "Choose");
+        add("ПОЗИЦИЯ", "ПОЗИЦІЯ", "POSITION");
+        add("центр", "центр", "centre");
+        add("сдвиг", "зсув", "offset");
+        add("шаг", "крок", "step");
+        add("Больше 5 хештегов в описании", "Більше 5 хештегів в описі", "More than 5 hashtags in a caption");
+        add("Длинные комментарии", "Довгі коментарі", "Long comments");
+        add("Призрак", "Привид", "Ghost");
+        add("Режим призрака", "Режим привида", "Ghost mode");
+        add("TikTok не узнает, что ты в сети, прочитал чат, печатаешь или смотрел историю и профиль. Чтобы скрыть «в сети», после включения перезапусти приложение.",
+                "TikTok не дізнається, що ти в мережі, прочитав чат, друкуєш чи дивився історію та профіль. Щоб приховати «в мережі», після ввімкнення перезапусти застосунок.",
+                "TikTok will not learn that you are online, have read a chat, are typing, or have seen a story or a profile. To hide being online, restart the app after switching it on.");
+        add("Не показывать «в сети»", "Не показувати «в мережі»", "Do not show as online");
+        add("Не отправлять «прочитано»", "Не надсилати «прочитано»", "Do not send read receipts");
+        add("Не отправлять «печатает»", "Не надсилати «друкує»", "Do not send typing");
+        add("Не отмечать просмотр историй", "Не позначати перегляд історій", "Do not mark stories as seen");
+        add("Не отмечать посещение профилей", "Не позначати відвідування профілів", "Do not mark profile visits");
+        add("Входящие: что скрыть", "Вхідні: що приховати", "Inbox: what to hide");
+        add("Скрыть полосу историй целиком", "Приховати смугу історій повністю", "Hide the whole stories strip");
+        add("Скрыть «Создать» (свою историю)", "Приховати «Створити» (свою історію)", "Hide “Create” (your own story)");
+        add("Скрыть истории друзей", "Приховати історії друзів", "Hide friends' stories");
+        add("Скрыть эфиры", "Приховати ефіри", "Hide LIVE");
+        add("Скрыть виджет и суперподписку в полосе", "Приховати віджет і суперпідписку в смузі", "Hide the widget and super subscription in the strip");
+        add("Скрыть заметки над аватарками", "Приховати нотатки над аватарками", "Hide notes over avatars");
+        add("Скрыть «Ваши вероятные знакомые»", "Приховати «Ваші ймовірні знайомі»", "Hide “People you may know”");
+        add("СЕТКА", "СІТКА", "GRID");
+        add("Выкл", "Вимк", "Off");
+        add("Центр и линии от углов", "Центр і лінії від кутів", "Centre and lines from corners");
+        add("Сдвиг идёт по линиям сетки", "Зсув іде по лініях сітки", "Moves go along the grid lines");
         add("Введите число от 1 до 10000",
                 "Введіть число від 1 до 10000",
                 "Enter a number from 1 to 10000");
@@ -787,9 +815,9 @@ final class Local {
         add("Каталог плагинов",
                 "Каталог плагінів",
                 "Plugin catalog");
-        add("Каталог MargyT подключён по умолчанию. Можно указать другой HTTPS JSON-каталог; пустой адрес отключает магазин.",
-                "Каталог MargyT підключено за замовчуванням. Можна вказати інший HTTPS JSON-каталог; порожня адреса вимикає магазин.",
-                "MargyT's catalog is connected by default. You can give another HTTPS JSON catalog; an empty address switches the store off.");
+        add("Каталог LotusTok подключён по умолчанию. Можно указать другой HTTPS JSON-каталог; пустой адрес отключает магазин.",
+                "Каталог LotusTok підключено за замовчуванням. Можна вказати інший HTTPS JSON-каталог; порожня адреса вимикає магазин.",
+                "LotusTok's catalog is connected by default. You can give another HTTPS JSON catalog; an empty address switches the store off.");
         add("Серии",
                 "Серії",
                 "Streaks");
@@ -838,9 +866,9 @@ final class Local {
         add("Без расписания",
                 "Без розкладу",
                 "No schedule");
-        add("Обновление MargyT",
-                "Оновлення MargyT",
-                "MargyT update");
+        add("Обновление LotusTok",
+                "Оновлення LotusTok",
+                "LotusTok update");
         add(" с",
                 " с",
                 " s");

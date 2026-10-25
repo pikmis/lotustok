@@ -117,3 +117,31 @@ COMBINED = BACKGROUND + GLYPH
 
 # the bitmap the legacy densities are scaled down from
 MASTER_PNG = "icon_out/play/ic_launcher-512.png"
+
+
+# LotusTok's own mark replaces the note: black on white, traced from
+# icons/launcher/lotustok_mono.png by hand-run tooling and kept in lotus.py.
+# The same file serves the themed (Material You) icon, which only reads the
+# shape of the glyph, so the foreground layer is also its monochrome one.
+from .lotus import PATH as _LOTUS
+
+BACKGROUND = [(WHITE, "M0,0 h108 v108 h-108 z")]
+
+
+def _shrunk(path: str, factor: float) -> str:
+    """The path drawn smaller about the middle of the 108-unit square."""
+    import re
+
+    def point(match):
+        x, y = float(match.group(1)), float(match.group(2))
+        return "%.2f,%.2f" % (54 + (x - 54) * factor, 54 + (y - 54) * factor)
+
+    return re.sub(r"(-?\d+\.?\d*),(-?\d+\.?\d*)", point, path)
+
+
+#: how much of its traced size the mark is drawn at, so it sits well inside the mask
+MARK_SCALE = 0.8
+
+GLYPH = [(0xFF000000, _shrunk(_LOTUS, MARK_SCALE))]
+COMBINED = BACKGROUND + GLYPH
+MASTER_PNG = "icons/launcher/lotustok.png"

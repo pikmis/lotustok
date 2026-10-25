@@ -43,7 +43,9 @@ class SettingsRowHookTests(unittest.TestCase):
             copy = copy[:copy.index(".end method")]
             self.assertIn("invoke-static {}, Lcat/narezany/margyt/SettingsCell;->title()Ljava/lang/String;\n\n"
                           "    move-result-object v11", copy)
-            self.assertIn("sget-object v0, LX/0LMt;->o:LX/0LPz;", copy)
+            self.assertIn("invoke-static {}, Lcat/narezany/margyt/SettingsCell;->icon()Ljava/lang/Object;\n\n"
+                          "    move-result-object v0\n\n    check-cast v0, LX/0LPz;", copy)
+            self.assertNotIn("LX/0LMt;->n:", copy)
             self.assertIn("invoke-static {v5, v4, v3, v2}, Lcat/narezany/margyt/SettingsCell;->again"
                           "(Ljava/lang/Object;ZZI)Ljava/lang/Object;\n\n    move-result-object v0\n\n"
                           "    check-cast v0, Lkotlin/jvm/functions/Function2;\n\n"
@@ -63,7 +65,7 @@ class SettingsRowHookTests(unittest.TestCase):
                 self.assertEqual(handle.read(), patched)
             with open(group, encoding="utf-8") as handle:
                 self.assertEqual(handle.read(), patched_group)
-            for target in ("title()Ljava/lang/String;", "again(Ljava/lang/Object;ZZI)Ljava/lang/Object;",
+            for target in ("title()Ljava/lang/String;", "icon()Ljava/lang/Object;", "again(Ljava/lang/Object;ZZI)Ljava/lang/Object;",
                            "draw(ZLjava/lang/Object;)Z"):
                 self.assertIn(dexpatch.SETTINGS_CELL + "->" + target, dexpatch.rewrite_targets())
 

@@ -127,7 +127,7 @@ final class DateInfo {
         return () -> {
             try {
                 ClipboardManager board = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (board != null) board.setPrimaryClip(ClipData.newPlainText("MargyT", text));
+                if (board != null) board.setPrimaryClip(ClipData.newPlainText("LotusTok", text));
                 Screen.say(Text.COPIED);
             } catch (Throwable error) {
                 Diary.note("date copy: " + error);
@@ -264,6 +264,11 @@ final class DateInfo {
 
     /** "2 месяца 3 дня назад": the two largest units that are not zero. */
     static String ago(long published, long now) {
+        return ago(published, now, 2);
+    }
+
+    /** As {@link #ago(long, long)}, with at most `units` of time written out. */
+    static String ago(long published, long now, int units) {
         if (now - published < 60) return pick("только что", "щойно", "just now");
         Calendar from = Calendar.getInstance();
         from.setTimeInMillis(published * 1000L);
@@ -289,7 +294,7 @@ final class DateInfo {
         parts[5] = rest % 60L;
         StringBuilder text = new StringBuilder();
         int used = 0;
-        for (int i = 0; i < 6 && used < 2; i++) {
+        for (int i = 0; i < 6 && used < units; i++) {
             if (parts[i] == 0) continue;
             if (text.length() > 0) text.append(' ');
             text.append(unit(i, parts[i]));

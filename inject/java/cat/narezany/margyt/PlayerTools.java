@@ -48,6 +48,8 @@ public final class PlayerTools {
   }};rewind=task;handler.post(task);
  }
 
+ /** 0 to 1: how far the current video has played, or -1 when the player is not known yet. */
+ static float progress(){Object manager=current.get();if(manager==null)return -1f;try{long duration=NativeRead.number(NativeRead.get(manager,"getDuration")),position=NativeRead.number(NativeRead.get(manager,"getCurrentPosition"));if(duration<=0||position<0)return -1f;return Math.max(0f,Math.min(1f,(float)position/duration));}catch(Throwable error){return -1f;}}
  static float percent(long position,long duration){return duration<=0?0f:Math.max(0f,Math.min(100f,100f*position/duration));}
  private static void seekAt(Object manager,long position,long duration){try{NativeRead.floating(manager,"seek",percent(position,duration));}catch(Throwable error){cancelSmooth();Diary.note("seek: "+error);Screen.say(Text.PLAYER_NOT_READY);}}
  static void cancelSmooth(){Runnable active=rewind;rewind=null;if(active!=null)handler.removeCallbacks(active);}

@@ -147,7 +147,12 @@ public final class Badge {
             Object uid = contact.getClass().getMethod("getUid").invoke(contact);
             if (name == null || !(uid instanceof String)) return name;
             String id = (String) uid;
-            return id.matches("[0-9]{1,24}") ? marked(name, id, false) : name;
+            if (!id.matches("[0-9]{1,24}")) return name;
+            String shown = marked(name, id, false);
+            // the folders of chats know a row by whose it is, and the row shows this name
+            ChatFolders.seen(name, id);
+            ChatFolders.seen(shown, id);
+            return shown;
         } catch (Throwable ignored) {
             // an account whose name could not be dressed still has a name
             return name;
@@ -264,6 +269,7 @@ public final class Badge {
      */
     private static CharSequence typed(TextView view, CharSequence text) {
         watch(view);
+        text = InboxTitle.replace(text);
         if (text == null) return text;
         String cleaned = strip(text.toString());
         return cleaned.equals(text.toString()) ? text : cleaned;
@@ -338,6 +344,7 @@ public final class Badge {
 
     private static CharSequence marked(TextView view, CharSequence text) {
         if (text == null) return text;
+        text = InboxTitle.replace(text);
 
         Looks.clear(view);
 
@@ -511,7 +518,7 @@ public final class Badge {
         public void onClick(View widget) {
             if (Version.TEST || Version.LITE) android.util.Log.i("MargyT", "badge: tapped, in " + widget.getContext());
             String head = badge.title != null && badge.title.length() > 0
-                    ? badge.title : "MargyT";
+                    ? badge.title : "LotusTok";
             Popup.show(widget.getContext(), head, badge.text, badge.button,
                     large(widget, badge));
         }

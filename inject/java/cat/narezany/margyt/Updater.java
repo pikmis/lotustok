@@ -35,7 +35,7 @@ public final class Updater {
     private Updater() {}
 
     private static final String SOURCE =
-            "https://git.narez.xyz/narezany/MargyT/raw/branch/main/version.json";
+            "https://tok.lotusgram.lol/updates/version.json";
 
     public static final String KEY_REMIND = "update_remind";
 
@@ -219,7 +219,7 @@ public final class Updater {
         final Context context=caller.getApplicationContext();
         final String url=where;
         final File apk = file(context);
-        final DownloadTasks.Control control=DownloadTasks.begin("update",Local.of("Обновление MargyT"),Local.of("Мод"),()->fetch(context));
+        final DownloadTasks.Control control=DownloadTasks.begin("update",Local.of("Обновление LotusTok"),Local.of("Мод"),()->fetch(context));
         Net.away("update apk", new Runnable() {
             @Override
             public void run() {

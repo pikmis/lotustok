@@ -326,7 +326,7 @@ public final class SettingsRow implements Application.ActivityLifecycleCallbacks
         circle.setColor(0xFF000000);
         glyph.setBackground(circle);
         glyph.setClipToOutline(true);
-        glyph.setContentDescription("MargyT");
+        glyph.setContentDescription("LotusTok");
         row.addView(glyph, new LinearLayout.LayoutParams(dp(activity, 24), dp(activity, 24)));
 
         TextView title = new TextView(activity);

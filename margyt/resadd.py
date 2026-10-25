@@ -61,7 +61,8 @@ def add_files(data: bytes, package_id: int, type_name: str,
 
 
 def add_adaptive_icons(data: bytes, package_id: int,
-                       names_and_paths: List[tuple]) -> bytes:
+                       names_and_paths: List[tuple],
+                       package_name: str = "margyt", sdk: int = 26) -> bytes:
     """Add mipmaps with a PNG default and an adaptive XML value on API 26+.
 
     Each tuple is (resource name, legacy PNG path, adaptive XML or PNG path).
@@ -78,6 +79,7 @@ def add_adaptive_icons(data: bytes, package_id: int,
         package_id, [row[0] for row in names_and_paths],
         list(range(first, first + count)),
         list(range(first + count, first + 2 * count)),
+        package_name, sdk,
     )
     out = bytearray(grown)
     out.extend(package)
@@ -87,17 +89,17 @@ def add_adaptive_icons(data: bytes, package_id: int,
 
 
 def _package_adaptive(package_id: int, keys: List[str], legacy: List[int],
-                      adaptive: List[int]) -> bytes:
+                      adaptive: List[int], package_name: str = "margyt", sdk: int = 26) -> bytes:
     type_pool = _pool(["mipmap"])
     key_pool = _pool(keys)
     body = type_pool + key_pool + _spec(len(keys))
-    body += _type(len(keys), legacy) + _type(len(keys), adaptive, sdk=26)
+    body += _type(len(keys), legacy) + _type(len(keys), adaptive, sdk=sdk)
     header_size = 288
     head = bytearray(header_size)
     struct.pack_into("<HHI", head, 0, RES_TABLE_PACKAGE, header_size,
                      header_size + len(body))
     struct.pack_into("<I", head, 8, package_id)
-    name = "margyt".encode("utf-16-le")
+    name = package_name.encode("utf-16-le")
     head[12:12 + len(name)] = name
     struct.pack_into("<4I", head, 268,
                      header_size, 1, header_size + len(type_pool), len(keys))

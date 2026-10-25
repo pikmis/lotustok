@@ -52,8 +52,8 @@ EVERYONE = 25
 #: how long a browser stays known without signing in again
 KNOWN = 180 * 86400
 
-#: the same person the bot answers to
-OWNER = 7826361017
+#: the same person the bot answers to: a Telegram id, LOTUSTOK_OWNER
+OWNER = int(os.environ.get("LOTUSTOK_OWNER") or 0)
 TOKEN_FILE = os.path.join(HERE, "bot.txt")
 
 

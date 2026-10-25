@@ -44,7 +44,7 @@ public final class Badges {
      * and nobody could decide anything about their own. So there is a small
      * service instead, and it answers with the same shape the file had.
      */
-    public static final String SERVER = "https://margy.narez.xyz/api";
+    public static final String SERVER = "https://tok.lotusgram.lol/api";
 
     private static final String SOURCE = SERVER + "/badges";
     private static final String FILES = SERVER + "/icon/";
@@ -79,13 +79,13 @@ public static final String KEY = "badges_on";
         if (known != null) return known;
         try {
             android.content.Context context = Margy.context();
-            if (context == null) return true;  // on until there is somewhere to read from
+            if (context == null) return false;  // on until there is somewhere to read from
             boolean on = context.getSharedPreferences(Margy.PREFS,
-                    android.content.Context.MODE_PRIVATE).getBoolean(KEY, true);
+                    android.content.Context.MODE_PRIVATE).getBoolean(KEY, false);
             cached = on;
             return on;
         } catch (Throwable ignored) {
-            return true;
+            return false;
         }
     }
 

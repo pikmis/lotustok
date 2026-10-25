@@ -37,11 +37,25 @@ public final class Launcher {
     /** The empty name is TikTok's own, the one the build did not add. */
     public static final String DEFAULT = "";
 
+    /** The icons the build ships. TikTok's own is not offered: LotusTok's is the plain one. */
     public static String[] all() {
-        String[] out = new String[Shots.KEYS.length + 1];
-        out[0] = DEFAULT;
-        System.arraycopy(Shots.KEYS, 0, out, 1, Shots.KEYS.length);
-        return out;
+        if (Shots.KEYS.length == 0) return new String[] {DEFAULT};
+        return Shots.KEYS.clone();
+    }
+
+    /**
+     * Once, after an update: the icon the build ships first becomes the one
+     * shown, even on a phone that chose another before. Later choices are kept.
+     */
+    public static void migrate(Context context) {
+        if (context == null || Shots.KEYS.length == 0) return;
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE);
+            if (prefs.getBoolean("icon_first_v1", false)) return;
+            prefs.edit().putBoolean("icon_first_v1", true).apply();
+            choose(context, Shots.KEYS[0]);
+        } catch (Throwable ignored) {
+        }
     }
 
     public static String nameOf(String which) {
@@ -51,8 +65,11 @@ public final class Launcher {
 
     public static String chosen() {
         SharedPreferences prefs = prefs();
-        String which = prefs == null ? DEFAULT : prefs.getString(KEY, DEFAULT);
-        return indexOf(which) < 0 ? DEFAULT : which;
+        // the first icon the build ships is LotusTok's own, and it is the one shown
+        // until another is chosen
+        String first = Shots.KEYS.length > 0 ? Shots.KEYS[0] : DEFAULT;
+        String which = prefs == null ? first : prefs.getString(KEY, first);
+        return indexOf(which) < 0 ? first : which;
     }
 
     /**
@@ -87,7 +104,7 @@ public final class Launcher {
      */
     public static void choose(Context context, String which) {
         if (context == null) return;
-        if (indexOf(which) < 0) which = DEFAULT;
+        if (indexOf(which) < 0) which = Shots.KEYS.length > 0 ? Shots.KEYS[0] : DEFAULT;
         try {
             PackageManager packages = context.getPackageManager();
             String self = context.getPackageName();

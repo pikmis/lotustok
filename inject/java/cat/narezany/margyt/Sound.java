@@ -54,10 +54,10 @@ public final class Sound {
         Boolean known = cached;
         if (known != null) return known;
         SharedPreferences prefs = prefs();
-        if (prefs == null) return true;  // the default, before anything is read
-        boolean on = true;
+        if (prefs == null) return false;  // the default, before anything is read
+        boolean on = false;
         try {
-            on = prefs.getBoolean(KEY, true);
+            on = prefs.getBoolean(KEY, false);
         } catch (Throwable ignored) {
         }
         cached = on;

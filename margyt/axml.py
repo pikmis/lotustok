@@ -46,6 +46,8 @@ ATTR_IDS = {
     "configChanges": 0x0101001F,
     "launchMode": 0x0101001D,
     "roundIcon": 0x0101052C,
+    # the picture an adaptive icon's layer is drawn from
+    "drawable": 0x01010199,
     "authorities": 0x01010018,
     # 16842779, read out of android.jar rather than written down: the build
     # checks every one of these against it and stops on a disagreement

@@ -29,8 +29,11 @@ public final class MargyProvider extends ContentProvider {
         Context context = getContext();
         if (context == null) return true;
         Margy.attach(context);
+        try { Launcher.migrate(context); } catch(Throwable ignored) {}
         try { CrashReports.start(context); } catch(Throwable ignored) {}
         if (!Version.LITE) SocialLibrary.start();
+        // before TikTok builds the services the ghost stands in front of
+        Ghost.start();
         Diary.note("start-up hook ran");
         try {
             Context application = context.getApplicationContext();

@@ -44,8 +44,8 @@ public final class Tags {
         Boolean known = on;
         if (known != null) return known.booleanValue();
         SharedPreferences prefs = prefs();
-        if (prefs == null) return true;
-        boolean value = prefs.getBoolean(KEY_ON, true);
+        if (prefs == null) return false;
+        boolean value = prefs.getBoolean(KEY_ON, false);
         on = Boolean.valueOf(value);
         return value;
     }

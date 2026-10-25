@@ -1,0 +1,41 @@
+{
+  "_comment": "The badges a fresh LotusTok server starts with, read once by seed.py. Nobody holds any yet: give them from the panel (/admin) or with badgectl. 'users' are the numeric TikTok account ids.",
+  "badges": [
+    {
+      "id": "owner",
+      "users": [],
+      "colour": "8DD1B0",
+      "title": "LotusTok",
+      "text": "The owner of LotusTok",
+      "text_ru": "Владелец LotusTok",
+      "text_uk": "Власник LotusTok",
+      "button": "Got it",
+      "button_ru": "Понятно",
+      "button_uk": "Зрозуміло"
+    },
+    {
+      "id": "supporter",
+      "users": [],
+      "colour": "FFB74D",
+      "title": "LotusTok",
+      "text": "Supports LotusTok",
+      "text_ru": "Поддерживает LotusTok",
+      "text_uk": "Підтримує LotusTok",
+      "button": "Got it",
+      "button_ru": "Понятно",
+      "button_uk": "Зрозуміло"
+    },
+    {
+      "id": "helper",
+      "users": [],
+      "colour": "64B5F6",
+      "title": "LotusTok",
+      "text": "Helped with LotusTok",
+      "text_ru": "Помог с LotusTok",
+      "text_uk": "Допоміг із LotusTok",
+      "button": "Got it",
+      "button_ru": "Понятно",
+      "button_uk": "Зрозуміло"
+    }
+  ]
+}

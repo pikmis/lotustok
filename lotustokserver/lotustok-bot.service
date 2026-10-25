@@ -1,0 +1,21 @@
+[Unit]
+Description=LotusTok Telegram bot
+After=network.target lotustok-badges.service
+
+[Service]
+User=lotustok
+Group=lotustok
+WorkingDirectory=/opt/lotustok
+EnvironmentFile=/etc/lotustok.env
+ExecStart=/usr/bin/python3 /opt/lotustok/bot.py
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/lotustok
+
+[Install]
+WantedBy=multi-user.target

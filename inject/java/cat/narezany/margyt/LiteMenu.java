@@ -18,7 +18,7 @@ public final class LiteMenu {
     private LiteMenu() {}
 
     public static String title() {
-        return "MargyT Lite";
+        return "LotusTok Lite";
     }
 
     /** What the row does when tapped, as the kind of function Lite's rows take. */
@@ -36,7 +36,7 @@ public final class LiteMenu {
                     case "equals":
                         return given != null && given.length == 1 && proxy == given[0];
                     case "toString":
-                        return "MargyT Lite";
+                        return "LotusTok Lite";
                     default:
                         return null;
                 }

@@ -92,6 +92,7 @@ class Icon:
 
     def _replace_adaptive(self, path: str, axml: Axml) -> None:
         self.log.append("  %s: adaptive icon, following its layers" % path)
+        foreground = None
         for layer in ("background", "foreground"):
             for node in axml.elements(layer):
                 attr = axml.attr(node, "drawable")
@@ -102,6 +103,27 @@ class Icon:
                     self.log.append("    <%s> is not a reference, left alone" % layer)
                     continue
                 self._replace_layer(attr.data, layer)
+                if layer == "foreground":
+                    foreground = attr.data
+        self._add_monochrome(path, axml, foreground)
+
+    def _add_monochrome(self, path: str, axml: Axml, foreground: Optional[int]) -> None:
+        """The themed icon: the foreground's own shape, drawn again as the monochrome layer.
+
+        The launcher tints a themed icon from the alpha of this layer alone, so the
+        resource that is already the glyph is the right one -- and it is an id of the
+        app's own package, which every launcher reads without trouble.
+        """
+        if foreground is None or axml.elements("monochrome"):
+            return
+        root = next((n for n in axml.nodes if n.kind == 0x0102), None)
+        if root is None:
+            return
+        element = axml.make_element("monochrome")
+        axml.set_attr_ref(element, "drawable", foreground)
+        axml.insert_into(root, [element, axml.close_element(element)])
+        self.apk.replace(path, axml.build())
+        self.log.append("    <monochrome> added, 0x%08x" % foreground)
 
     def _replace_layer(self, res_id: int, layer: str) -> None:
         values = self.arsc.values(res_id)

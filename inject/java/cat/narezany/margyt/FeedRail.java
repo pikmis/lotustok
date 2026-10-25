@@ -26,7 +26,7 @@ public final class FeedRail {
         AccountAppearance.prefs(c).edit().putBoolean(KEYS[kind],value).apply();reloadSettings();
     }
     static void reloadSettings(){
-        shown=null;
+        shown=null;FeedHide.reloadSettings();
         java.util.List<View> views;
         synchronized(slots){views=new java.util.ArrayList<View>(slots.keySet());}
         for(View v:views)if(v!=null)v.post(()->apply(v));
@@ -75,6 +75,7 @@ public final class FeedRail {
         int next=state.kind==2&&Repost.replacing(view)?View.INVISIBLE:shown(state.kind)?state.wanted:View.GONE;
         if(view.getVisibility()!=next)view.setVisibility(next);
         Md3.rail(view,state.kind);
+        FeedHide.page(view);
     }
     /** The icons of the buttons on screen, looked at before each frame: a tap changes one without anything being laid out. */
     private static View[] seen=new View[0];private static int[] kinds=new int[0];private static long listed;
@@ -82,8 +83,9 @@ public final class FeedRail {
     static void icons(){
         long now=android.os.SystemClock.uptimeMillis();
         // with the round icons off there is nothing to swap; it is looked at
-        // twice a second all the same, so that turning them off puts TikTok's back
-        if(!Md3.isOn(Md3.KEY_ICONS)){if(now-idled<500L)return;idled=now;}
+        // twice a second all the same, so that turning them off puts TikTok's back; the feed
+        // in Material 3 needs every frame, for what TikTok dims while a button is pressed
+        if(!Md3.isOn(Md3.KEY_ICONS)&&!Md3.isOn(Md3.KEY_FEED)){if(now-idled<500L)return;idled=now;}
         if(now-listed>500L){
             listed=now;
             synchronized(slots){
@@ -99,6 +101,6 @@ public final class FeedRail {
     static void restyle(){
         java.util.List<View> views;
         synchronized(slots){views=new java.util.ArrayList<View>(slots.keySet());}
-        for(View v:views)if(v!=null&&v.isAttachedToWindow()){State state;synchronized(slots){state=slots.get(v);}if(state!=null)Md3.rail(v,state.kind);}
+        for(View v:views)if(v!=null&&v.isAttachedToWindow()){State state;synchronized(slots){state=slots.get(v);}if(state!=null){Md3.rail(v,state.kind);FeedHide.page(v);}}
     }
 }

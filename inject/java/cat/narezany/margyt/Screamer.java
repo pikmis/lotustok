@@ -59,9 +59,9 @@ final class Screamer {
 
     static boolean loud(Context context) {
         try {
-            return context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SOUND, true);
+            return context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SOUND, false);
         } catch (Throwable error) {
-            return true;
+            return false;
         }
     }
 

@@ -449,7 +449,14 @@ public final class Fonts {
         }catch(Throwable ignored){}
     }
 
-    public static void setText(TextView view,int resource){view.setText(resource);apply(view);}
+    public static void setText(TextView view,int resource){
+        view.setText(resource);
+        // a label set from a resource never reaches Badge.setText, so the
+        // inbox title is swapped here as well
+        CharSequence swapped=InboxTitle.replace(view.getText());
+        if(swapped!=view.getText())view.setText(swapped);
+        apply(view);
+    }
     public static void setHint(TextView view,int resource){view.setHint(resource);apply(view);}
     public static void setHint(TextView view,CharSequence text){view.setHint(text);apply(view);}
     public static void setTextAppearance(TextView view,int resource){view.setTextAppearance(resource);apply(view);}

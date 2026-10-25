@@ -220,17 +220,14 @@ final class Panel {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(16), dp(10), dp(16), dp(10));
         row.setMinimumHeight(dp(56));
-        TextView mark = new TextView(context);
-        mark.setGravity(Gravity.CENTER);
-        mark.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        mark.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        android.widget.ImageView mark = new android.widget.ImageView(context);
+        mark.setPadding(dp(3), dp(3), dp(3), dp(3));
         GradientDrawable ring = new GradientDrawable();
         ring.setShape(GradientDrawable.OVAL);
         if (chosen) {
             int accent = Accent.colour();
             ring.setColor(accent);
-            mark.setText("✓");
-            mark.setTextColor(onAccent(accent));
+            mark.setImageDrawable(SettingsGlyph.make("check", onAccent(accent)));
         } else {
             ring.setColor(0);
             ring.setStroke(dp(2), skin.muted());

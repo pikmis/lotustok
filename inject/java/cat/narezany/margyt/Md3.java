@@ -83,6 +83,59 @@ final class Md3 {
         return value;
     }
 
+    // ------------------------------------------------- the parts of the feed
+
+    /**
+     * The feed's style is several things, and each can be left off while the rest stay: the
+     * card behind the caption, the column behind the buttons beside the video, the move of
+     * that column (and of the author's picture and the sound's cover with it) in from the
+     * edge, the capsule behind the tabs across the top, and the discs behind the buttons there.
+     * All of them are on until switched off, and none is drawn when the feed's style is off.
+     */
+    static final String PART_CAPTION = "md3_feed_caption", PART_COLUMN = "md3_feed_column",
+            PART_SHIFT = "md3_feed_shift", PART_TABS = "md3_feed_tabs", PART_DISCS = "md3_feed_discs";
+    private static final String[] PARTS = {PART_CAPTION, PART_COLUMN, PART_SHIFT, PART_TABS, PART_DISCS};
+    private static final int CAPTION = 0, COLUMN = 1, SHIFT = 2, TABS = 3, DISCS = 4;
+    private static final Boolean[] PART_ON = new Boolean[PARTS.length];
+
+    /** What is switched, on its own, for a part of the feed's style. */
+    static boolean partOn(String key) {
+        for (int i = 0; i < PARTS.length; i++) if (PARTS[i].equals(key)) return stored(i);
+        return false;
+    }
+
+    static void setPart(String key, boolean value) {
+        for (int i = 0; i < PARTS.length; i++) {
+            if (!PARTS[i].equals(key)) continue;
+            PART_ON[i] = value;
+            Context context = Margy.context();
+            if (context != null) {
+                context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, value).apply();
+            }
+        }
+        // the buttons beside a video are dressed when they are handed over; they are asked to look again
+        FeedRail.restyle();
+    }
+
+    private static boolean stored(int which) {
+        Boolean known = PART_ON[which];
+        if (known != null) return known;
+        Context context = Margy.context();
+        if (context == null) return true;  // too early to know; not remembered
+        boolean value = true;
+        try {
+            value = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(PARTS[which], true);
+        } catch (Throwable ignored) {
+        }
+        PART_ON[which] = value;
+        return value;
+    }
+
+    /** Whether a part of the feed is drawn: the feed's style is on, and that part has not been left off. */
+    private static boolean part(int which) {
+        return on(FEED) && stored(which);
+    }
+
     // ------------------------------------------------------------ the shapes
 
     private static final int DISC = 0, CARD = 1, PILL = 2;
@@ -102,6 +155,35 @@ final class Md3 {
         float foot = -1f;
         private final android.graphics.Path edge = new android.graphics.Path();
         private final float[] corners = new float[8];
+        /** For a card: a view in the one it is behind, which the card is drawn round, `pad` out from each side. */
+        java.util.List<WeakReference<View>> parts;
+        /** For a caption: the words themselves; with none the card is not drawn, and a name alone is not on one. */
+        WeakReference<View> words;
+        float pad;
+        /** How far below the view the card goes, when that is not `pad`; less than nothing: the same. */
+        float padBottom = -1f;
+        /** How far above the words the card begins, when that is not `pad`; less than nothing: the same. */
+        float padTop = -1f;
+        /** For a caption: how far from the screen's right edge it stops, so that it does not go under the column of actions; nought for no limit. */
+        float stop;
+        /** For a card: the half-width of a rounded-square button drawn over it round the icon in `around`; nought for none. */
+        float button;
+        /** Whether the rounded square is drawn behind each icon; off, `button` still says how tall the column is round them. */
+        boolean squares = true;
+        /** How far above the button the card begins, when it is the head of a column and goes further up than its slot; less than nothing: at the slot. */
+        float head = -1f;
+        /** For a section of a column: the space left between it and the next, in px; less than nothing: the card is not a section. */
+        float gap = -1f;
+        /** Whether the section is the one of a button that is on (a liked heart, a saved bookmark), and how far it has become a circle. */
+        long checked;
+        /** How far a section reaches below its slot, in px. */
+        float reach;
+        private boolean selected;
+        private float morph;
+        private long morphAt;
+        /** The corner of that button at rest, and while it is pressed. */
+        float buttonCorner, buttonPressed;
+        private final Paint buttonPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         /** What a disc is centred on, when that is not the view it is behind. */
         WeakReference<View> around;
         WeakReference<View> host;
@@ -143,9 +225,59 @@ final class Md3 {
         public void draw(Canvas canvas) {
             Rect whole = getBounds();
             box.set(whole.left + left, whole.top + top, whole.right - right, whole.bottom - bottom);
+            float want = selected ? 1f : 0f;
+            if (morph != want) {
+                long now = android.os.SystemClock.uptimeMillis();
+                float step = Math.min(now - (morphAt == 0L ? now - 16L : morphAt), 48L) / 240f;
+                morphAt = now;
+                morph = want > morph ? Math.min(want, morph + step) : Math.max(want, morph - step);
+                if (morph == want) morphAt = 0L;
+                again();
+            }
             if (wide > 0f) box.left = box.right - wide;
+            if (kind == CARD && parts != null) {
+                // round the words themselves: the least box that holds every one of them
+                View on = host == null ? null : host.get();
+                if (on == null) return;
+                if (words != null) {
+                    View said = words.get();
+                    if (said == null || !said.isShown() || said.getHeight() <= 0) return;
+                    if (textOf(said).length() == 0) return;
+                }
+                float l = Float.MAX_VALUE, t = Float.MAX_VALUE, r = -Float.MAX_VALUE, b = -Float.MAX_VALUE;
+                float[] at = new float[2];
+                for (WeakReference<View> ref : parts) {
+                    View part = ref.get();
+                    if (part == null || !part.isShown() || part.getWidth() <= 0) continue;
+                    if (!offset(part, on, at)) continue;
+                    l = Math.min(l, at[0]);
+                    t = Math.min(t, at[1]);
+                    r = Math.max(r, at[0] + part.getWidth());
+                    b = Math.max(b, at[1] + part.getHeight());
+                }
+                if (l > r) return;
+                box.set(l - pad, t - (padTop >= 0f ? padTop : pad), r + pad, b + (padBottom >= 0f ? padBottom : pad));
+                if (stop > 0f) {
+                    int[] place = new int[2];
+                    on.getLocationOnScreen(place);
+                    float edge = on.getResources().getDisplayMetrics().widthPixels - stop - place[0];
+                    if (box.right > edge) box.right = Math.max(box.left + pad * 2f, edge);
+                }
+            }
+            if (kind == CARD && button > 0f && wide > 0f) {
+                // the column is centred on its icons, which is not the middle of the slot
+                float[] at = where();
+                if (at != null) {
+                    box.left = at[0] - wide / 2f;
+                    box.right = at[0] + wide / 2f;
+                    if (head >= 0f) box.top = at[1] - button - head;
+                    View slot = host == null ? null : host.get();
+                    if (gap >= 0f && slot != null) box.bottom = box.top + slot.getHeight() - gap + reach;
+                }
+            }
             if (kind == DISC) {
                 float x = box.centerX(), y = box.centerY();
+                boolean morph = pressed && around != null;
                 View centre = around == null ? null : around.get(), on = host == null ? null : host.get();
                 if (centre != null && on != null && centre.getWidth() > 0) {
                     float offX = centre.getWidth() / 2f, offY = centre.getHeight() / 2f;
@@ -161,17 +293,96 @@ final class Md3 {
                         y = offY;
                     }
                 }
-                canvas.drawCircle(x, y, radius, paint);
-            } else if (kind == CARD && foot >= 0f && foot != radius) {
-                corners[0] = corners[1] = corners[2] = corners[3] = radius;
-                corners[4] = corners[5] = corners[6] = corners[7] = foot;
+                if (morph) {
+                    // Material 3: while pressed, a round icon button becomes squarer
+                    float corner = radius * 0.4f;
+                    canvas.drawRoundRect(x - radius, y - radius, x + radius, y + radius, corner, corner, paint);
+                } else {
+                    canvas.drawCircle(x, y, radius, paint);
+                }
+            } else if (kind == CARD && (foot >= 0f && foot != radius || morph > 0f || button > 0f)) {
+                // Material 3: what is on is a circle; the corners run from the group's to full, with a smooth step
+                float eased = morph * morph * (3f - 2f * morph);
+                float full = Math.min(box.width(), box.height()) / 2f;
+                float foots = foot >= 0f ? foot : radius;
+                float topCorner = radius + (full - radius) * eased;
+                float footCorner = foots + (full - foots) * eased;
+                corners[0] = corners[1] = corners[2] = corners[3] = topCorner;
+                corners[4] = corners[5] = corners[6] = corners[7] = footCorner;
                 edge.rewind();
                 edge.addRoundRect(box, corners, android.graphics.Path.Direction.CW);
                 canvas.drawPath(edge, paint);
+                if (button > 0f && pressed) {
+                    // Material 3's pressed state: a layer of the content's colour, over the section and cut to its shape
+                    buttonPaint.setColor(0x24FFFFFF);
+                    canvas.drawPath(edge, buttonPaint);
+                }
             } else {
                 float round = kind == PILL ? box.height() / 2f : radius;
                 canvas.drawRoundRect(box, round, round, paint);
             }
+            if (kind == CARD && button > 0f && squares) drawButton(canvas);
+        }
+
+        /** The button over a card: tonal, a rounded square round the middle of the icon, squarer yet while pressed. */
+        private void drawButton(Canvas canvas) {
+            float[] at = where();
+            if (at == null) return;
+            View on = host == null ? null : host.get();
+            if (on == null) return;
+            buttonPaint.setColor(tonal(on.getContext()));
+            float corner = pressed ? buttonPressed : buttonCorner;
+            canvas.drawRoundRect(at[0] - button, at[1] - button, at[0] + button, at[1] + button, corner, corner, buttonPaint);
+        }
+
+        /** The middle of the icon in `around`, in the view the shape is behind; null when it cannot be told. */
+        private float[] where() {
+            View centre = around == null ? null : around.get(), on = host == null ? null : host.get();
+            // TikTok swaps the icon's view when a button is tapped: the one in the slot now is the one
+            if (on != null && kind == CARD && button > 0f) {
+                View now = pictureOf(on, 0);
+                if (now != null) centre = now;
+            }
+            if (centre == null || on == null || centre.getWidth() <= 0) return null;
+            float x = centre.getWidth() / 2f, y = centre.getHeight() / 2f;
+            View step = centre;
+            for (int i = 0; i < 6 && step != null && step != on; i++) {
+                x += step.getLeft();
+                y += step.getTop();
+                Object parent = step.getParent();
+                step = parent instanceof View ? (View) parent : null;
+            }
+            return step == on ? new float[] {x, y} : null;
+        }
+
+        void select(boolean on) {
+            if (selected == on) return;
+            selected = on;
+            again();
+        }
+
+        /** Drawn again, and everything round it: a section reaches past the slot it is the background of. */
+        private void again() {
+            invalidateSelf();
+            View slot = host == null ? null : host.get();
+            if (slot == null) return;
+            slot.invalidate();
+            Object up = slot.getParent();
+            if (up instanceof View) ((View) up).invalidate();
+        }
+
+        /** Whether the view it is behind is being pressed, for a button that changes shape under a finger. */
+        private boolean pressed;
+
+        @Override public boolean isStateful() { return kind == DISC || button > 0f; }
+
+        @Override
+        protected boolean onStateChange(int[] state) {
+            boolean now = false;
+            for (int one : state) if (one == android.R.attr.state_pressed) now = true;
+            if (now == pressed) return false;
+            pressed = now;
+            return true;
         }
 
         @Override public void setAlpha(int alpha) {}
@@ -225,7 +436,7 @@ final class Md3 {
 
     // ------------------------------------------------------------ the colours
 
-    private static final int SHELL = 0, CHOSEN = 1, OVER_VIDEO = 2, CHOSEN_OVER_VIDEO = 3;
+    private static final int SHELL = 0, CHOSEN = 1, OVER_VIDEO = 2, CHOSEN_OVER_VIDEO = 3, TONAL = 4;
     /** Everything the mod has dressed, to be coloured again when what it lies on changes colour. */
     private static final java.util.WeakHashMap<View, Shape> WORN = new java.util.WeakHashMap<View, Shape>();
 
@@ -332,6 +543,7 @@ final class Md3 {
     private static int colour(View view, int role) {
         if (role == OVER_VIDEO) return overVideo();
         if (role == CHOSEN_OVER_VIDEO) return chosenOverVideo();
+        if (role == TONAL) return tonal(view.getContext());
         int ground = behind(view);
         // a surface one step up from the page: a card, a capsule, a disc
         int shell = NavBar.mix(ground, ink(ground), 0.07f);
@@ -365,6 +577,23 @@ final class Md3 {
         }
     }
 
+    /**
+     * The container of a tonal icon button over a video: Material 3's secondary
+     * container in its dark scheme, which is the phone's own accent two steps
+     * down from its brightest. Where the phone has no such colours, the mod's
+     * accent stirred into a dark grey.
+     */
+    private static int tonal(Context context) {
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try {
+                return context.getColor(android.R.color.system_accent2_700) | 0xFF000000;
+            } catch (Throwable ignored) {
+                // no dynamic colours here
+            }
+        }
+        return NavBar.mix(0xFF1D1B20, Accent.colour() | 0xFF000000, 0.25f) | 0xFF000000;
+    }
+
     /** A disc over a video: dark whatever the theme, and mostly there. */
     private static int overVideo() {
         return (NavBar.mix(0xFF17161B, Accent.colour() | 0xFF000000, 0.10f) & 0x00FFFFFF) | 0x99000000;
@@ -377,36 +606,276 @@ final class Md3 {
 
     // ---------------------------------------------------- the feed's buttons
 
+    /** How far in, in dp, the column of actions and what lines up with it are moved from the screen's edge. */
+    private static final float COLUMN_SHIFT = 14f;
+
+    /** What stands in the column's line, the author's picture above it and the sound's cover below, moved with it. */
+    private static void shift(View view, boolean on) {
+        float want = on ? -COLUMN_SHIFT * view.getResources().getDisplayMetrics().density : 0f;
+        if (view.getTranslationX() != want) view.setTranslationX(want);
+    }
+
     /**
-     * One of the four buttons beside a video, as TikTok hands it over, and
-     * which of the four it is. They are dressed as one column: a card behind
-     * each, close together, with large corners only where the column ends --
-     * so the first that is shown has them at its head and the last at its
-     * foot, whichever buttons the person has switched off.
+     * What else is on the page of the video a button belongs to: the caption, which gets a
+     * card, and the author's picture and the sound's cover, which move with the column.
+     * The pager is not walked, so the page is found from the button, upwards.
+     */
+    private static void companions(View slot, boolean on) {
+        try {
+            names(slot.getContext());
+            if (captionHost == 0) return;
+            View page = null;
+            Object up = slot.getParent();
+            for (int i = 0; i < 12 && up instanceof View; i++) {
+                View candidate = (View) up;
+                if (candidate.findViewById(captionHost) != null) {
+                    page = candidate;
+                    break;
+                }
+                up = candidate.getParent();
+            }
+            if (page == null) return;
+            View host = page.findViewById(captionHost);
+            if (host != null) {
+                if (on && part(CAPTION)) caption(host);
+                else strip(host);
+            }
+            View box = captionBox == 0 ? null : page.findViewById(captionBox);
+            if (box != null) room(box, on && part(CAPTION));
+            View follow = followColumn == 0 ? null : page.findViewById(followColumn);
+            if (follow != null) {
+                shift(follow, on && part(SHIFT));
+                float lift = on && part(SHIFT) ? -10f * follow.getResources().getDisplayMetrics().density : 0f;
+                if (follow.getTranslationY() != lift) follow.setTranslationY(lift);
+                unclip(follow);
+            }
+            View cover = coverButton == 0 ? null : page.findViewById(coverButton);
+            if (cover != null) {
+                shift(cover, on && part(SHIFT));
+                unclip(cover);
+            }
+        } catch (Throwable error) {
+            Diary.detail("md3: page: " + error);
+        }
+    }
+
+    /** What is moved sideways is cut at the edge of what it is in, unless that lets it draw outside. */
+    private static void unclip(View view) {
+        if (view instanceof ViewGroup) ((ViewGroup) view).setClipChildren(false);
+        Object up = view.getParent();
+        for (int i = 0; i < 4 && up instanceof ViewGroup; i++) {
+            ((ViewGroup) up).setClipChildren(false);
+            ((ViewGroup) up).setClipToPadding(false);
+            up = ((ViewGroup) up).getParent();
+        }
+    }
+
+    private static final int ROOM = 0x4D617260;
+
+    /**
+     * The words of a caption stop short of the column of actions, so that the card they
+     * are on does not go under it: the box they are in is given room on the right, and
+     * gives it back when the style is switched off.
+     */
+    private static void room(View box, boolean on) {
+        float unit = box.getResources().getDisplayMetrics().density;
+        int extra = Math.round(16f * unit);
+        Object given = box.getTag(ROOM);
+        if (on && given == null) {
+            box.setTag(ROOM, Boolean.TRUE);
+            box.setPadding(box.getPaddingLeft(), box.getPaddingTop(), box.getPaddingRight() + extra, box.getPaddingBottom());
+        } else if (!on && given != null) {
+            box.setTag(ROOM, null);
+            box.setPadding(box.getPaddingLeft(), box.getPaddingTop(), Math.max(0, box.getPaddingRight() - extra), box.getPaddingBottom());
+        }
+    }
+
+    private static final String[] TRANSLATE = {"Перевод", "Перевести", "Translate", "Переклад", "Перекласти"};
+
+    /** The translate button of a caption: the words on it are all there is to know it by. */
+    private static View translateIn(View view, int depth) {
+        if (depth > 12 || view == null || view.getVisibility() != View.VISIBLE) return null;
+        if (view instanceof android.widget.TextView) {
+            CharSequence text = ((android.widget.TextView) view).getText();
+            if (text != null) {
+                String said = text.toString().trim();
+                for (String word : TRANSLATE) if (word.equalsIgnoreCase(said)) return view;
+            }
+            return null;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View found = translateIn(group.getChildAt(i), depth + 1);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The caption under a video, on a card: the author, the date, the words and the
+     * translate button, and nothing else that happens to be in the same container.
+     */
+    private static void caption(View host) {
+        if (!part(CAPTION)) {
+            strip(host);
+            return;
+        }
+        java.util.List<WeakReference<View>> parts = new java.util.ArrayList<WeakReference<View>>();
+        for (int id : new int[] {captionTitle, captionTime, captionWords}) {
+            View part = id == 0 ? null : host.findViewById(id);
+            if (part != null) parts.add(new WeakReference<View>(part));
+        }
+        View translate = translateIn(host, 0);
+        if (translate != null) parts.add(new WeakReference<View>(translate));
+        if (parts.isEmpty()) {
+            strip(host);
+            return;
+        }
+        float unit = host.getResources().getDisplayMetrics().density;
+        Shape card = wear(host, CARD, true);
+        card.parts = parts;
+        View words = captionWords == 0 ? null : host.findViewById(captionWords);
+        card.words = words == null ? null : new WeakReference<View>(words);
+        card.host = new WeakReference<View>(host);
+        card.pad = 8f * unit;
+        // the progress line runs just under the caption: the card stops short of it
+        card.padBottom = 3f * unit;
+        // what stands on top of a caption (who reposted, the friends who liked it) is not covered by its card
+        card.padTop = 3f * unit;
+        card.radius = 20f * unit;
+        card.stop = 92f * unit;
+        if (!card.dressed || card.role != OVER_VIDEO) card.dress(host, OVER_VIDEO);
+    }
+
+    /** The words a view shows, for one that is not a TextView: what it tells accessibility. */
+    private static String textOf(View view) {
+        if (view instanceof android.widget.TextView) {
+            CharSequence text = ((android.widget.TextView) view).getText();
+            return text == null ? "" : text.toString().trim();
+        }
+        try {
+            android.view.accessibility.AccessibilityNodeInfo info = android.view.accessibility.AccessibilityNodeInfo.obtain();
+            view.onInitializeAccessibilityNodeInfo(info);
+            CharSequence text = info.getText();
+            CharSequence said = text == null || text.length() == 0 ? info.getContentDescription() : text;
+            info.recycle();
+            return said == null ? "" : said.toString().trim();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    /** Where a view is in one of its ancestors, with whatever either has been moved by; false when it is not in it. */
+    private static boolean offset(View view, View in, float[] out) {
+        float x = 0f, y = 0f;
+        View step = view;
+        for (int i = 0; i < 10 && step != null && step != in; i++) {
+            x += step.getLeft() + step.getTranslationX();
+            y += step.getTop() + step.getTranslationY();
+            Object parent = step.getParent();
+            step = parent instanceof View ? (View) parent : null;
+        }
+        out[0] = x;
+        out[1] = y;
+        return step == in;
+    }
+
+    private static final int HIGHLIGHT = 0x4D617280;
+
+    /**
+     * What TikTok paints inside a button to show it is pressed is a plain rectangle, and it
+     * shows through the section's rounded corners. It is taken off while the section is
+     * dressed, and given back when it is not.
+     */
+    private static void flatten(View view, boolean on, boolean top) {
+        if (view == null) return;
+        if (!top) {
+            Object kept = view.getTag(HIGHLIGHT);
+            if (on && kept == null && view.getBackground() != null) {
+                view.setTag(HIGHLIGHT, view.getBackground());
+                view.setBackground(null);
+            } else if (!on && kept instanceof Drawable) {
+                view.setTag(HIGHLIGHT, null);
+                if (view.getBackground() == null) view.setBackground((Drawable) kept);
+            }
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) flatten(group.getChildAt(i), on, false);
+        }
+    }
+
+    /** The picture of a button: the first image in it. */
+    private static View pictureOf(View view, int depth) {
+        if (view == null || depth > 5) return null;
+        if (view instanceof android.widget.ImageView) return view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View found = pictureOf(group.getChildAt(i), depth + 1);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * One of the four buttons beside a video, as TikTok hands it over, and which of the
+     * four it is. They are dressed as one column: a container behind them all, and in it a
+     * tonal icon button (a rounded square) for each, the count left under it. The container
+     * is closed at the first that is shown and at the last, whichever have been switched off.
      */
     static void rail(View slot, int which) {
         try {
             if (slot == null) return;
             forgetIcons(slot, 0);
             icons(slot, which);
-            if (!on(FEED)) {
+            boolean feed = on(FEED);
+            companions(slot, feed);
+            if (!part(COLUMN)) {
                 strip(slot);
+                flatten(slot, false, true);
+                boolean moved = part(SHIFT);
+                slot.setTranslationX(moved ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
+                if (moved) unclip(slot);
                 return;
             }
+            flatten(slot, true, true);
+            // the column is wider than the button it is the background of, and a view's
+            // background is cut at its edge unless what holds it lets it draw outside
+            Object holder = slot.getParent();
+            for (int i = 0; i < 3 && holder instanceof ViewGroup; i++) {
+                ((ViewGroup) holder).setClipChildren(false);
+                ((ViewGroup) holder).setClipToPadding(false);
+                holder = ((ViewGroup) holder).getParent();
+            }
+            // TikTok sets the icons 32 dp in from the edge; the column needs more room than that on each side
+            slot.setTranslationX(part(SHIFT) ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
             boolean first = true, last = true;
             for (int i = 0; i < which; i++) if (FeedRail.shown(i)) first = false;
             for (int i = which + 1; i < FeedRail.KEYS.length; i++) if (FeedRail.shown(i)) last = false;
             float unit = slot.getResources().getDisplayMetrics().density;
-            Shape card = wear(slot, CARD, true);
-            // What TikTok hands over is as wide as the place a touch counts,
-            // which for three of the four is wider than the first and wider
-            // still when the number under the icon is a long one. Their icons
-            // are all the same distance from the right, so that is what the
-            // card is measured from.
-            card.right = 6f * unit;
-            card.wide = 48f * unit;
-            card.top = card.bottom = unit;
-            card.ends(first ? 24f * unit : 6f * unit, last ? 24f * unit : 6f * unit);
+            View picture = pictureOf(slot, 0);
+            // what TikTok lays over a button when it is pressed is a square; the section has its own
+            Shape card = wear(slot, CARD, false);
+            // the slot is as wide as a touch counts and flush with the screen: the column is drawn
+            // round the icon's own place, which is what the button is centred on too
+            card.right = 8f * unit;
+            card.wide = 72f * unit;
+            card.top = 0f;
+            card.head = 4f * unit;
+            card.gap = 2f * unit;
+            card.reach = last ? 5f * unit : 0f;
+            card.bottom = last ? 4f * unit : 0f;
+            card.ends(first ? 27f * unit : 8f * unit, last ? 22f * unit : 8f * unit);
+            card.around = picture == null ? null : new WeakReference<View>(picture);
+            card.host = new WeakReference<View>(slot);
+            card.button = 21f * unit;
+            card.squares = false;
+            card.buttonCorner = 15f * unit;
+            card.buttonPressed = 9f * unit;
             card.dress(slot, OVER_VIDEO);
         } catch (Throwable error) {
             Diary.detail("md3: rail: " + error);
@@ -469,6 +938,7 @@ final class Md3 {
         public void draw(Canvas canvas) {
             Rect box = getBounds();
             if (box.isEmpty()) return;
+            sample();
             int saved = canvas.save();
             // Google leaves more room round an icon than TikTok does
             float grown = 1.14f, side = Math.min(box.width(), box.height()) * grown;
@@ -480,9 +950,23 @@ final class Md3 {
             canvas.restoreToCount(saved);
         }
 
-        @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); }
-        @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); }
-        @Override public void setTint(int colour) { paint.setColor(colour); }
+        /** Whether what it is painted with is a colour and not white, found by painting one pixel with it. */
+        boolean vivid;
+        private static final android.graphics.Bitmap PIXEL = android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888);
+        private static final Canvas SAMPLER = new Canvas(PIXEL);
+
+        private void sample() {
+            PIXEL.eraseColor(0);
+            SAMPLER.drawRect(0f, 0f, 1f, 1f, paint);
+            int seen = PIXEL.getPixel(0, 0);
+            int high = Math.max(android.graphics.Color.red(seen), Math.max(android.graphics.Color.green(seen), android.graphics.Color.blue(seen)));
+            int low = Math.min(android.graphics.Color.red(seen), Math.min(android.graphics.Color.green(seen), android.graphics.Color.blue(seen)));
+            vivid = android.graphics.Color.alpha(seen) > 40 && high - low > 70;
+        }
+
+        @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); sample(); }
+        @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); sample(); }
+        @Override public void setTint(int colour) { paint.setColor(colour); sample(); }
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
@@ -552,10 +1036,78 @@ final class Md3 {
         }
     }
 
+    /** TikTok lays a rectangle over a button while it is pressed, as the view's foreground; the section is what shows it. */
+    private static void noForeground(View view, int depth) {
+        if (view == null || depth > 4) return;
+        if (view.getForeground() != null) view.setForeground(null);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) noForeground(group.getChildAt(i), depth + 1);
+        }
+    }
+
+    /** Whether the icon of a button wears a colour of its own (TikTok's red heart, its saved bookmark) and not the white of one at rest. */
+    private static boolean vivid(View slot) {
+        View picture = pictureOf(slot, 0);
+        if (!(picture instanceof android.widget.ImageView)) return false;
+        Drawable shown = ((android.widget.ImageView) picture).getDrawable();
+        if (shown == null) return false;
+        Rect at = shown.getBounds();
+        if (at.isEmpty()) return false;
+        // the icon is painted small, off the screen, and looked at: a colour of its own is a button that is on
+        if (SAMPLE == null) {
+            SAMPLE = android.graphics.Bitmap.createBitmap(24, 24, android.graphics.Bitmap.Config.ARGB_8888);
+            SAMPLER = new Canvas(SAMPLE);
+        }
+        SAMPLE.eraseColor(0);
+        int saved = SAMPLER.save();
+        SAMPLER.scale(24f / at.width(), 24f / at.height());
+        SAMPLER.translate(-at.left, -at.top);
+        try {
+            shown.draw(SAMPLER);
+        } finally {
+            SAMPLER.restoreToCount(saved);
+        }
+        for (int y = 0; y < 24; y += 2) {
+            for (int x = 0; x < 24; x += 2) {
+                int seen = SAMPLE.getPixel(x, y);
+                if (android.graphics.Color.alpha(seen) < 160) continue;
+                int high = Math.max(android.graphics.Color.red(seen), Math.max(android.graphics.Color.green(seen), android.graphics.Color.blue(seen)));
+                int low = Math.min(android.graphics.Color.red(seen), Math.min(android.graphics.Color.green(seen), android.graphics.Color.blue(seen)));
+                if (high - low > 70) return true;
+            }
+        }
+        return false;
+    }
+
+    private static android.graphics.Bitmap SAMPLE;
+    private static Canvas SAMPLER;
+
     /** The icons of one button looked at again: which button it is, is what the mod was told when handed it. */
     static void icons(View slot, int which) {
         try {
-            if (slot != null && slot.getVisibility() == View.VISIBLE) icon(slot, which, 0);
+            if (slot != null && slot.getVisibility() == View.VISIBLE) {
+                icon(slot, which, 0);
+                // TikTok sets its own background on a button while it is pressed: the section goes back behind it
+                Object put = slot.getTag(PUT);
+                if (put instanceof Drawable && slot.getBackground() != put) slot.setBackground((Drawable) put);
+                noForeground(slot, 0);
+                // a pressed button is dimmed by TikTok (eased down to 0.6 and back up), and what is dimmed is cut to its edges: the section,
+                // which reaches past them, came out a rectangle. It is lit by its own pressed layer instead.
+                if (slot.getAlpha() < 1f && slot.getAlpha() > 0.55f) slot.setAlpha(1f);
+                // the heart and the bookmark: on, their section is a circle
+                if (which == 0 || which == 2) {
+                    Object card = slot.getTag(OURS);
+                    if (card instanceof Shape) {
+                        Shape section = (Shape) card;
+                        long now = android.os.SystemClock.uptimeMillis();
+                        if (now - section.checked > 120L) {
+                            section.checked = now;
+                            section.select(vivid(slot));
+                        }
+                    }
+                }
+            }
         } catch (Throwable ignored) {
             // a button taken apart in the middle of a frame is looked at again on the next
         }
@@ -594,6 +1146,7 @@ final class Md3 {
 
     /** What TikTok 47.2 calls the views that have no class of their own to be known by. */
     private static int feedLeft, feedSearch, feedTop, profileRoot, profileTabs, statNumber;
+    private static int captionBox, captionHost, captionTitle, captionTime, captionWords, followColumn, coverButton;
     private static boolean named;
 
     private static void names(Context context) {
@@ -608,6 +1161,13 @@ final class Md3 {
             profileRoot = resources.getIdentifier("t7i", "id", pack);
             profileTabs = resources.getIdentifier("z2h", "id", pack);
             statNumber = resources.getIdentifier("t7t", "id", pack);
+            captionHost = resources.getIdentifier("bqx", "id", pack);
+            captionBox = resources.getIdentifier("bqw", "id", pack);
+            captionTitle = resources.getIdentifier("title", "id", pack);
+            captionTime = resources.getIdentifier("tv_post_time", "id", pack);
+            captionWords = resources.getIdentifier("desc", "id", pack);
+            followColumn = resources.getIdentifier("i_a", "id", pack);
+            coverButton = resources.getIdentifier("pnm", "id", pack);
             Diary.detail("md3: names " + (feedLeft != 0 ? 1 : 0) + (feedSearch != 0 ? 1 : 0) + (profileRoot != 0 ? 1 : 0)
                     + (profileTabs != 0 ? 1 : 0) + (statNumber != 0 ? 1 : 0));
         } catch (Throwable error) {
@@ -657,9 +1217,11 @@ final class Md3 {
             if (view == null || !view.isAttachedToWindow()) return;
             looked = SystemClock.uptimeMillis();
             try {
+                long probe = Probe.start();
                 names(view.getContext());
                 visit(view, 0, false);
                 FeedRail.restyle();
+                Probe.stop(Probe.LOOK, probe);
             } catch (Throwable error) {
                 Diary.detail("md3: " + error);
             }
@@ -667,8 +1229,14 @@ final class Md3 {
 
         @Override
         public boolean onPreDraw() {
+            long whole = Probe.start();
             try {
+                long probe = Probe.start();
                 FeedRail.icons();
+                Probe.stop(Probe.RAIL_ICONS, probe);
+                probe = Probe.start();
+                FeedHide.frame();
+                Probe.stop(Probe.HIDE_FRAME, probe);
                 recolour();
                 // Every row there is, every frame: which of them begins a group
                 // and which ends one changes as the list is scrolled, and there
@@ -711,7 +1279,7 @@ final class Md3 {
                     int chosen = chosenIn(strip);
                     if (chosen != feedChosen) {
                         feedChosen = chosen;
-                        pills(strip, on(FEED), 2f, 13f, CHOSEN_OVER_VIDEO);
+                        pills(strip, part(TABS), 2f, 13f, CHOSEN_OVER_VIDEO);
                     }
                     // TikTok gives the line its colour back when the feed under it changes
                     underline(strip, false);
@@ -719,6 +1287,7 @@ final class Md3 {
             } catch (Throwable ignored) {
                 // a list taken apart in the middle of a frame is looked at again on the next
             }
+            Probe.stop(Probe.PRE_DRAW, whole);
             return true;
         }
 
@@ -727,10 +1296,13 @@ final class Md3 {
             int id = view.getId();
             if (id != View.NO_ID && id != 0) {
                 if (id == feedLeft || id == feedSearch) {
-                    disc(view, on(FEED), OVER_VIDEO, 19f);
+                    disc(view, part(DISCS), OVER_VIDEO, 19f);
                     return;
                 }
-                if (id == feedTop && view instanceof ViewGroup) feedTop((ViewGroup) view);
+                if (id == feedTop && view instanceof ViewGroup) {
+                    FeedHide.top((ViewGroup) view);
+                    feedTop((ViewGroup) view);
+                }
                 if (id == profileRoot) inProfile = true;
                 if (id == profileTabs && view instanceof ViewGroup) {
                     tabStrip((ViewGroup) view);
@@ -742,7 +1314,7 @@ final class Md3 {
                 }
             }
             if (BurnEye.eye(view)) {
-                disc(view, on(FEED), OVER_VIDEO, 19f);
+                disc(view, part(DISCS), OVER_VIDEO, 19f);
                 return;
             }
             int kind = kind(view);
@@ -800,7 +1372,7 @@ final class Md3 {
                     ? ((ViewGroup) inner).getChildAt(0) : null;
             if (!(words instanceof ViewGroup) || ((ViewGroup) words).getChildCount() < 2) return;
             ViewGroup strip = (ViewGroup) words;
-            if (!on(FEED)) {
+            if (!part(TABS)) {
                 Md3.strip(window);
                 for (int i = 0; i < strip.getChildCount(); i++) Md3.strip(strip.getChildAt(i));
                 underline(strip, true);

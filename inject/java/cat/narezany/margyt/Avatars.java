@@ -35,13 +35,13 @@ public static final String KEY = "save_avatars";
         if (known != null) return known;
         try {
             android.content.Context context = Margy.context();
-            if (context == null) return true;  // on until there is somewhere to read from
+            if (context == null) return false;  // on until there is somewhere to read from
             boolean on = context.getSharedPreferences(Margy.PREFS,
-                    android.content.Context.MODE_PRIVATE).getBoolean(KEY, true);
+                    android.content.Context.MODE_PRIVATE).getBoolean(KEY, false);
             cached = on;
             return on;
         } catch (Throwable ignored) {
-            return true;
+            return false;
         }
     }
 

@@ -43,8 +43,8 @@ public final class Brightness {
         Boolean known = cached;
         if (known != null) return known;
         SharedPreferences prefs = prefs();
-        if (prefs == null) return true;  // too early to know; not remembered
-        boolean on = prefs.getBoolean(KEY, true);
+        if (prefs == null) return false;  // too early to know; not remembered
+        boolean on = prefs.getBoolean(KEY, false);
         cached = on;
         return on;
     }

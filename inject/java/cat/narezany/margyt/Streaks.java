@@ -633,7 +633,7 @@ public final class Streaks {
     private static volatile Method status;
 
     /**
-     * Send to every conversation the mod knows about, whatever its state.
+     * Send to every conversation with a flame.
      *
      * A button rather than a schedule: the point is to find out whether
      * sending works at all, so it skips every condition -- not grey, already
@@ -660,7 +660,12 @@ public final class Streaks {
             public void run() {
                 for (String conversation : all) {
                     if(!owner.equals(Account.liveId()))return;
-                    String state = statusOf(ask(conversation));
+                    StreakData data = ask(conversation);
+                    if (data == null || data.streak < SHOWN_FROM) {
+                        Diary.note("streak test: " + conversation + " has no flame, skipped");
+                        continue;
+                    }
+                    String state = statusOf(data);
                     boolean sent = deliver(context, sticker, conversation);
                     Diary.note("streak test: " + conversation + " (" + state + ") -> "
                             + (sent ? "request submitted, delivery unconfirmed"
@@ -700,6 +705,7 @@ public final class Streaks {
                         StreakData data = ask(conversation);
                         if (data == null) continue;
                         if (data.convId != null && !conversation.equals(data.convId)) continue;
+                        if (data.streak < SHOWN_FROM) continue;
                         String state = statusOf(data);
                         if ("ACTIVE".equals(state) || GREY.equals(state)) targets.add(conversation);
                     }

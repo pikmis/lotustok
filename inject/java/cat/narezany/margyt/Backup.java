@@ -35,6 +35,7 @@ public final class Backup {
             "profile_badge_x", "profile_badge_y", "profile_badge_zoom",
             Feed.KEY, Feed.KEY_LIVE, Feed.KEY_PHOTOS,
             "rail_show_like","rail_show_comment","rail_show_fav","rail_show_share",
+                "rail_show_live","rail_show_search","rail_show_foryou","rail_show_following","rail_show_series","rail_show_desc","rail_show_name",
             "streak_send_minute","repost_btn","repost_pos","profile_layout","friends_pinned","message_times","notify_messages","notify_promos","notify_other","notify_no_prompts",
             "dl_quality","frame_quality","player_default_speed","player_seek_step","player_reverse_rate","feed_blocked_authors","feed_blocked_cards",Feed.KEY_STORIES,Feed.KEY_SUGGESTIONS,
             Sound.KEY, Seekbar.KEY, Dates.KEY,
@@ -204,6 +205,7 @@ public final class Backup {
                 Flags.KEY_SPEED_LOCK, Flags.KEY_COMMENT_REPOST,
                 Flags.KEY_SELF_REPOST,
                 "rail_show_like","rail_show_comment","rail_show_fav","rail_show_share",
+                "rail_show_live","rail_show_search","rail_show_foryou","rail_show_following","rail_show_series","rail_show_desc","rail_show_name",
             "streak_send_minute","repost_btn","repost_pos","notify_messages","notify_promos","notify_other","notify_no_prompts",
                 "feed_blocked_authors","feed_blocked_cards",Feed.KEY_STORIES,Feed.KEY_SUGGESTIONS,
                 Margy.KEY_ENABLED, Margy.KEY_COUNTRY, Updater.KEY_REMIND

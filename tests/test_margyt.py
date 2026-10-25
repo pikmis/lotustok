@@ -1208,11 +1208,7 @@ class TheIconsKeepTheirPlaces(unittest.TestCase):
     home screen. New icons go on the end, and this says so out loud.
     """
 
-    SHIPPED = [
-        "grafiti", "shine", "tiktok", "materialyou", "material3", "doodle",
-        "glitch", "google", "dotted", "terminal", "yaai", "deltamargyt",
-        "mteam", "deled", "margytcraft", "tigr", "govno", "glamour",
-    ]
+    SHIPPED = ["lotustok"]
 
     def test_every_icon_that_shipped_is_where_it_was(self):
         from margyt.build import Build

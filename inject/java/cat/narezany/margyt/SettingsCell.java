@@ -24,8 +24,8 @@ import java.lang.reflect.Proxy;
  *
  * The build does two things to TikTok's code for it. The function that draws
  * the "Display" row is copied under another name, and the copy takes its
- * title from here in place of TikTok's string, and the icon of the music
- * row. And where the first group draws its first row, it calls `draw` just
+ * title from here in place of TikTok's string, and the icon of the four
+ * petals (the note of the music row, where the build has no petals). And where the first group draws its first row, it calls `draw` just
  * before, which draws the copy. What the copy is given to draw is a state of
  * the same kind the Display row has, made here, whose one live part is what
  * happens on a tap -- and that opens MargyT's settings.
@@ -73,6 +73,51 @@ public final class SettingsCell {
     /** What the row says. Asked for by the copy of TikTok's function. */
     public static String title() {
         return Text.ROW;
+    }
+
+    private static final String ICON = "X.0LPz", ICONS = "X.0LMt";
+    /** The petals' vector, the first resource of the package the build added for it (margyt/petals.py spells it too). */
+    static final int PETALS = 0x33010000;
+    private static volatile Object icon;
+
+    /**
+     * The icon the copy of the row wears, asked for by the copy: TikTok's "vector resource" of the four
+     * petals. A build without the drawable, or one whose drawable does not read, gives the note of the
+     * music row, which is what the row wore before.
+     */
+    public static Object icon() {
+        Object known = icon;
+        if (known != null) return known;
+        try {
+            Class<?> type = Class.forName(ICON);
+            Object made = null;
+            if (petals()) {
+                Constructor<?> maker = type.getDeclaredConstructor(int.class);
+                maker.setAccessible(true);
+                made = maker.newInstance(PETALS);
+            }
+            if (made == null) {
+                Field note = Class.forName(ICONS).getDeclaredField("o");
+                note.setAccessible(true);
+                made = note.get(null);
+            }
+            icon = made;
+            return made;
+        } catch (Throwable error) {
+            Diary.note("settings row: no icon: " + error);
+            return null;
+        }
+    }
+
+    /** Whether the petals are in this apk and are a drawable that reads. */
+    private static boolean petals() {
+        try {
+            Context context = Margy.context();
+            if (context == null) return false;
+            return context.getResources().getDrawable(PETALS, null) != null;
+        } catch (Throwable missing) {
+            return false;
+        }
     }
 
     /**

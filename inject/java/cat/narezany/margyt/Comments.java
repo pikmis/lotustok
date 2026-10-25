@@ -79,13 +79,13 @@ public final class Comments {
         if (known != null) return known.booleanValue();
         try {
             Context context = Margy.context();
-            if (context == null) return true;
+            if (context == null) return false;
             boolean on = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE)
-                    .getBoolean(KEY_COPY, true);
+                    .getBoolean(KEY_COPY, false);
             copyEnabled = Boolean.valueOf(on);
             return on;
         } catch (Throwable ignored) {
-            return true;
+            return false;
         }
     }
 

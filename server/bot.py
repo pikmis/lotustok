@@ -37,11 +37,12 @@ import tiktok
 
 TOKEN_FILE = os.path.join(HERE, "bot.txt")
 
-#: where the badge service answers, for the avatar it passes on
-SITE = "https://margy.narez.xyz"
+#: where the badge service answers, for the avatar it passes on. Set in the
+#: environment (LOTUSTOK_SITE) by the service file; nothing is assumed here
+SITE = os.environ.get("LOTUSTOK_SITE", "").rstrip("/")
 
-#: who receives an icon somebody offers
-OWNER = 7826361017
+#: who receives an icon somebody offers: a Telegram id, LOTUSTOK_OWNER
+OWNER = int(os.environ.get("LOTUSTOK_OWNER") or 0)
 
 API = "https://api.telegram.org/bot%s/%s"
 

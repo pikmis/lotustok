@@ -263,6 +263,7 @@ public final class Accent {
         recolouredBitmaps.clear();
         recolouredVectors.clear();
         plainVectors.clear();
+        plainPictures.clear();
     }
 
     // ---------------------------------------------- where a colour is used
@@ -377,6 +378,10 @@ public final class Accent {
             if (known != null) return new android.graphics.drawable.BitmapDrawable(resources, known);
             int[] pixels = new int[width * height];
             source.getPixels(pixels, 0, width, 0, 0, width, height);
+            // Nearly every picture has no red in it. That is found out from the pixels in hand, before they are
+            // hashed for the disk and the disk is asked: that used to be done for every picture there is, on
+            // the thread a screen is being put together on.
+            if (!plainlyRed(pixels)) return drawable;
             // Larger pictures are remembered across runs, keyed by their pixels.
             // "bmp2": what was kept under the old name includes pictures that
             // should never have been moved, and must not be handed back
@@ -395,7 +400,7 @@ public final class Accent {
                 }
             }
             boolean any = false;
-            if (plainlyRed(pixels)) {
+            {
                 for (int i = 0; i < pixels.length; i++) {
                     int pixel = pixels[i];
                     if ((pixel >>> 24) == 0) continue;
@@ -879,16 +884,28 @@ public final class Accent {
      * on or the pack has nothing at that path -- which is nearly every call,
      * so the check has to be, and is, a flag and a lookup.
      */
+    /** Pictures asked for by number that had nothing to move, so that asking again is a lookup and not a read of every pixel. */
+    private static final java.util.Set<Long> plainPictures = java.util.Collections.synchronizedSet(new java.util.HashSet<Long>());
+
+    private static Drawable picture(Resources resources, int id, Drawable drawable) {
+        if (!(drawable instanceof android.graphics.drawable.BitmapDrawable) || colour() == TIKTOK) return moved(drawable);
+        long key = ((long) id << 8) | (resources.getConfiguration().uiMode & 0x30);
+        if (plainPictures.contains(key)) return drawable;
+        Drawable out = moved(drawable);
+        if (out == drawable) plainPictures.add(key);
+        return out;
+    }
+
     public static Drawable getDrawable(Context context, int id) {
-        return moved(context.getDrawable(id));
+        return picture(context.getResources(), id, context.getDrawable(id));
     }
 
     public static Drawable getDrawable(Resources resources, int id) {
-        return moved(resources.getDrawable(id));
+        return picture(resources, id, resources.getDrawable(id));
     }
 
     public static Drawable getDrawable(Resources resources, int id, Resources.Theme theme) {
-        return moved(resources.getDrawable(id, theme));
+        return picture(resources, id, resources.getDrawable(id, theme));
     }
 
     public static void setImageResource(ImageView view, int id) {

@@ -20,6 +20,7 @@ minutes and one that takes hours.
 
 from __future__ import annotations
 
+import glob
 import os
 import re
 import struct
@@ -232,6 +233,9 @@ CLASS_ANCHORED_SOURCES = {
 # TikTok 47.2.41's feed touch listener. The callback below is inserted only in
 # this one method after the multi-touch early return; no global touch dispatch
 # is rewritten.
+#: the release every hook below was written against; any other one is built
+#: leniently, skipping what does not match
+SUPPORTED_TIKTOK = "47.2.41"
 SPEED_TOUCH_CLASS = "LY/ATListenerS452S0100000_16;"
 SPEED_EDGE_CLASS = "LX/16wu;"
 SPEED_EDGE_METHOD = ".method public final onTouch(Landroid/view/View;Landroid/view/MotionEvent;)Z"
@@ -1549,8 +1553,20 @@ SETTINGS_FIRST_ROW = ("    invoke-static/range {v9 .. v14}, LX/1HtZ;->LIZIZ(ZZLc
 
 
 def _class_file(root: str, descriptor: str) -> Optional[str]:
-    path = os.path.join(root, *descriptor[1:-1].split("/")) + ".smali"
-    return path if os.path.exists(path) else None
+    # baksmali on Windows numbers a file whose name collides with another
+    # only by case, so the class may be 0MUp.1.smali -- and the plain name may
+    # be another class's file, since Windows does not tell the two apart. So
+    # every candidate is checked by the class it declares, not by its name
+    base = os.path.join(root, *descriptor[1:-1].split("/"))
+    directory, name = os.path.split(base)
+    candidates = [base + ".smali"] + glob.glob(glob.escape(directory) + os.sep + glob.escape(name) + ".*.smali")
+    for path in candidates:
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as handle:
+            if handle.readline().rstrip("\n").endswith(" " + descriptor):
+                return path
+    return None
 
 
 def rewrite_settings_row(root: str, dex: Optional[bytes] = None) -> Dict[str, int]:
@@ -1560,7 +1576,7 @@ def rewrite_settings_row(root: str, dex: Optional[bytes] = None) -> Dict[str, in
     of our own drawn like the others is to have their function draw it. So the
     function for the Display row is copied under the name `margyt`. The copy
     asks the mod for its title instead of reading TikTok's string, wears the
-    music row's icon, and when Compose wants it drawn again is drawn again by
+    mod's own icon (the four petals), and when Compose wants it drawn again is drawn again by
     the mod rather than by the class that would draw Display. And the first
     group, where it draws its first row, asks the mod to draw the copy first;
     the answer is whether the row after it is still the first of the group,
@@ -1586,7 +1602,9 @@ def rewrite_settings_row(root: str, dex: Optional[bytes] = None) -> Dict[str, in
                         r"    invoke-static \{v0, v6\}, LX/0L52;->LIZIZ\(ILX/0Lx7;\)Ljava/lang/String;",
                         "    invoke-static {}, %s->title()Ljava/lang/String;" % SETTINGS_CELL, copy)
                     copy, pictured = re.subn(r"sget-object v0, LX/0LMt;->n:LX/0LPz;",
-                                             "sget-object v0, LX/0LMt;->o:LX/0LPz;", copy)
+                                             "invoke-static {}, %s->icon()Ljava/lang/Object;\n\n"
+                                             "    move-result-object v0\n\n"
+                                             "    check-cast v0, LX/0LPz;" % SETTINGS_CELL, copy)
                     copy, again = re.subn(
                         r"    new-instance v0, Lkotlin/jvm/internal/AwS1S0121000_8;\n.*?"
                         r"invoke-direct/range \{v6 \.\. v11\}, Lkotlin/jvm/internal/AwS1S0121000_8;-><init>\(LX/0MUl;ZZII\)V",
@@ -1667,6 +1685,8 @@ def rewrite_speed_touch(root: str) -> Dict[str, int]:
             found_class = True
             start = text.find(SPEED_EDGE_METHOD if edge else SPEED_TOUCH_METHOD)
             if start < 0:
+                if os.environ.get("MARGYT_LENIENT"):
+                    continue
                 raise RuntimeError("TikTok feed touch callback has changed")
             end = text.find(".end method", start)
             if end < 0:
@@ -1677,6 +1697,8 @@ def rewrite_speed_touch(root: str) -> Dict[str, int]:
                 continue
             anchor = "    :cond_9\n" if edge else "    :cond_27\n"
             if method.count(anchor) != 1:
+                if os.environ.get("MARGYT_LENIENT"):
+                    continue
                 raise RuntimeError("TikTok feed touch callback anchor has changed")
             replacement = method.replace(anchor, anchor + SPEED_TOUCH_HOOK, 1)
             text = text[:start] + replacement + text[end:]
@@ -2115,6 +2137,7 @@ def rewrite_targets() -> List[str]:
     out.append(HDR_QUESTION)
     out.append(START_ROUTE)
     out.extend(["%s->title()Ljava/lang/String;" % SETTINGS_CELL,
+                "%s->icon()Ljava/lang/Object;" % SETTINGS_CELL,
                 "%s->again(Ljava/lang/Object;ZZI)Ljava/lang/Object;" % SETTINGS_CELL,
                 "%s->draw(ZLjava/lang/Object;)Z" % SETTINGS_CELL])
     out.append(CORNERS + "->cell(Landroid/view/View;)V")

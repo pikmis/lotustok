@@ -87,10 +87,12 @@ public class SettingsActivity extends Activity {
 
     /** Where the mod, its people and its money live. */
     private static final String CHANNEL = "https://t.me/margytiktok";
-    private static final String FORUM = "https://t.me/margeletforum";
+    private static final String LOTUS_CHANNEL = "https://t.me/LotusTok";
     private static final String OWNER_TELEGRAM = "https://t.me/narezany";
     private static final String OWNER_TIKTOK =
             "https://tiktok.com/@narezany?_r=1&_t=ZT-99hPDJ26hji_";
+    private static final String MOD_OWNER_TELEGRAM = "https://t.me/saintcursed";
+    private static final String MOD_OWNER_TIKTOK = "https://www.tiktok.com/@pikmis.love";
     /** Where a receipt goes: the channel's own messages, not somebody's inbox. */
     private static final String CHANNEL_WRITE = "https://t.me/margytiktok?direct";
     private static final String TTCUZ = "https://t.me/ttcuzmod";
@@ -99,6 +101,9 @@ public class SettingsActivity extends Activity {
             "https://git.narez.xyz/narezany/MargyT/src/branch/main/docs/plugins.md";
     private static final String YOOMONEY = "https://yoomoney.ru/to/4100118196133693";
     private static final String CARD_NUMBER = "2204120143055305";
+    /** LotusTok's own wallets (the card and YooMoney above are MargyT's). */
+    private static final String WALLET_TON = "UQCs4zwPZJ-rzFFotmWh9G8xwU-QuveDb0ILyLWbXe6bx_xa";
+    private static final String WALLET_TRON = "TLAQzs7XjHBkuwRv3L6RSJbBGpBnHjUwwD";
 
     private boolean countriesOpen;
     private boolean accentOpen;
@@ -109,6 +114,8 @@ public class SettingsActivity extends Activity {
     private boolean fontOpen;
     private boolean iconOpen;
     private ScrollView page;
+    /** The back button and the name of where it goes, which stay at the top of the screen while the page is scrolled. */
+    private LinearLayout header;
     private boolean thanksOpen;
     private int settingsGroup;
     private boolean mineOpen;
@@ -164,6 +171,12 @@ public class SettingsActivity extends Activity {
         root.addView(scroll, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+        header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(0, statusBar(), 0, 0);
+        root.addView(header, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+
         setContentView(root);
         rebuild();
         maybeAskForSupport();
@@ -218,7 +231,14 @@ public class SettingsActivity extends Activity {
         sectionTargets.clear();settingTargets.clear();
         disclosureBodies.clear();disclosureArrows.clear();renderDisclosureKey=null;
         column.removeAllViews();
-        column.addView(backArrow());
+        if (header != null) {
+            header.removeAllViews();
+            header.setBackgroundColor(skin.page);
+            header.addView(backArrow());
+            header.setElevation(0f);
+        }
+        // the room it takes at the top of the page, which scrolls under it
+        column.addView(new View(this), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60)));
         if (settingsGroup == DONATE_PAGE) {
             column.addView(title(Text.DONATE_BANNER));
             donatePage();
@@ -233,7 +253,9 @@ public class SettingsActivity extends Activity {
             restoreScroll(previousScroll);
             return;
         }
-        column.addView(title(settingsGroup == 0 ? (Version.LITE ? "MargyT Lite" : "MargyT") : groupName(settingsGroup)));
+        // the mark, above the name, and it can be turned
+        if (settingsGroup == 0 && searchQuery.length() == 0) column.addView(new Logo3D(this));
+        column.addView(title(settingsGroup == 0 ? (Version.LITE ? "LotusTok Lite" : "LotusTok") : groupName(settingsGroup)));
         if(settingsGroup==0 || searchQuery.length()>0)column.addView(searchBox());
         if (settingsGroup != 0) column.addView(wrap(actionRow("info",Local.of("Подсказки"),null,this::showSectionHelp)));
         if (searchQuery.length() > 0) {
@@ -244,7 +266,6 @@ public class SettingsActivity extends Activity {
 
         if (settingsGroup == 0) {
             if (Badges.freeStillOpen() && !Mine.hasFree()) column.addView(freeBanner());
-            column.addView(donateBanner());
             column.addView(groupNavigation());
             column.addView(wrap(actionRow("info",Local.of("Обучение"),null,() -> Tutorial.show(this))));
             column.addView(versions());
@@ -286,18 +307,15 @@ public class SettingsActivity extends Activity {
         loading.addView(actionRow("account_circle", Text.AVATAR_SHAPE,
                 AvatarShape.nameOf(AvatarShape.chosen()), this::chooseAvatarShape));
         loading.addView(line());
-        loading.addView(toggleRow("view_compact", Text.NEW_PROFILE, Flags.isOn(Flags.KEY_NEW_PROFILE),
-                on -> Flags.set(Flags.KEY_NEW_PROFILE, on)));
-        loading.addView(line());
         loading.addView(toggleRow("tune", Text.NAV_CAPSULE, NavBar.isEnabled(), NavBar::setEnabled));
+        loading.addView(line());
+        loading.addView(actionRow("tune", Local.of("Настройки нижней панели"), null, this::showNavSettings));
         loading.addView(line());
         loading.addView(toggleRow("tune", Text.MD3_FEED, Md3.isOn(Md3.KEY_FEED), on -> Md3.set(Md3.KEY_FEED, on)));
         loading.addView(line());
+        loading.addView(actionRow("tune", Local.of("Элементы ленты Material 3"), Local.of("Подложки и кнопки: включать по отдельности"), this::showFeedMd3Settings));
+        loading.addView(line());
         loading.addView(toggleRow("tune", Text.MD3_ICONS, Md3.isOn(Md3.KEY_ICONS), on -> Md3.set(Md3.KEY_ICONS, on)));
-        loading.addView(line());
-        loading.addView(toggleRow("tune", Text.MD3_PROFILE, Md3.isOn(Md3.KEY_PROFILE), on -> Md3.set(Md3.KEY_PROFILE, on)));
-        loading.addView(line());
-        loading.addView(toggleRow("tune", Text.MD3_INBOX, Md3.isOn(Md3.KEY_INBOX), on -> Md3.set(Md3.KEY_INBOX, on)));
         column.addView(wrap(loading));
 
         column.addView(section(Text.THEME));
@@ -358,6 +376,16 @@ public class SettingsActivity extends Activity {
         account.addView(idRow(Text.ACCOUNT_SEC_ID, Account.secId()));
         column.addView(wrap(account));
 
+        column.addView(section(MY_PROFILE));
+        LinearLayout mine = card();
+        mine.addView(toggleRow("view_compact", Text.NEW_PROFILE, Flags.isOn(Flags.KEY_NEW_PROFILE),
+                on -> Flags.set(Flags.KEY_NEW_PROFILE, on)));
+        mine.addView(line());
+        mine.addView(toggleRow("tune", Text.MD3_PROFILE, Md3.isOn(Md3.KEY_PROFILE), on -> Md3.set(Md3.KEY_PROFILE, on)));
+        mine.addView(line());
+        mine.addView(actionRow("repeat", Local.of("Удалить все мои репосты"), Local.of("Отменит каждый ваш репост, по одному"), () -> RepostPurge.begin(this)));
+        column.addView(wrap(mine));
+
         column.addView(section(Text.REGION));
         LinearLayout head = card();
         head.addView(switchRow());
@@ -416,13 +444,27 @@ public class SettingsActivity extends Activity {
 
         column.addView(section(Text.RAIL));
         LinearLayout rail=card();
-        String[] railNames={Text.RAIL_LIKE,Text.RAIL_COMMENT,Text.RAIL_FAV,Text.RAIL_SHARE};
-        String[] railIcons={"favorite_border","chat","star","share"};
-        for(int i=0;i<railNames.length;i++){
+        String[] railIcons={"favorite_border","chat","star","share","public","search","play_arrow","people","animation","article","account_circle"};
+        for(int i=0;i<PANELS.length;i++){
             final int kind=i;
-            rail.addView(liveToggleRow(railIcons[i],railNames[i],FeedRail.shown(i),on->FeedRail.setShown(kind,on)));
+            rail.addView(liveToggleRow(railIcons[i],PANELS[i],panelShown(i),on->panelSet(kind,on)));
         }
+        rail.addView(caption(Text.RAIL_NOTE));
         column.addView(wrap(rail));
+
+        column.addView(section(Local.of("Редактор интерфейса")));
+        LinearLayout editor = card();
+        editor.addView(actionRow("tune", Local.of("Открыть редактор"), Local.of("Нажимайте на любой элемент TikTok: скрыть, сдвинуть, изменить размер и цвет"), () -> {
+            ViewEditor.begin();
+            Toast.makeText(this, Local.of("Откройте нужный экран TikTok"), Toast.LENGTH_LONG).show();
+            finish();
+        }));
+        editor.addView(line());
+        editor.addView(actionRow("block", Local.of("Сбросить все правки"), Integer.toString(ViewEditor.count()), () -> {
+            ViewEditor.resetAll();
+            rebuild();
+        }));
+        column.addView(wrap(editor));
 
         column.addView(section(Text.VIDEO));
         LinearLayout video = card();
@@ -433,9 +475,21 @@ public class SettingsActivity extends Activity {
         video.addView(line());
         video.addView(liveToggleRow("timeline", Text.SEEKBAR, Seekbar.isEnabled(),
                 Seekbar::setEnabled));
+        // the progress line of a video as a wave in the accent colour; off until asked for
+        video.addView(line());
+        video.addView(liveToggleRow("timeline", Local.of("Волнистая линия видео (Material 3)"),
+                MD3Progress.on(), MD3Progress::set));
+
         video.addView(line());
         video.addView(liveToggleRow("info", Text.ALWAYS_DATE, Dates.isEnabled(),
                 Dates::setEnabled));
+        video.addView(line());
+        String[] dateStyles = {"2 единицы: «2 мес. 3 дн. назад»", "1 единица: «3 дн. назад»", "Дата: 15.10.2026"};
+        video.addView(actionRow("schedule", Local.of("Формат даты"), dateStyles[Dates.style()], () ->
+                new ModDialog.Builder(this).setItems(dateStyles, (dialog, index) -> {
+                    Dates.setStyle(index);
+                    rebuild();
+                }).show()));
         video.addView(line());
         video.addView(toggleRow("hdr_off", Text.OWN_BRIGHTNESS, Brightness.isEnabled(), on -> {
             Brightness.setEnabled(on);
@@ -463,6 +517,12 @@ public class SettingsActivity extends Activity {
         LinearLayout comments = card();
         comments.addView(liveToggleRow("article", Text.COMMENT_COPY_ON, Comments.isCopyEnabled(),
                 Comments::setCopyEnabled));
+        comments.addView(line());
+        comments.addView(liveToggleRow("expand_more", Local.of("Стрелки вместо лайка и дизлайка в комментариях"),
+                CommentVotes.isEnabled(), CommentVotes::setEnabled));
+        comments.addView(line());
+        comments.addView(liveToggleRow("article", Local.of("Длинные комментарии"),
+                Ghost.on(Ghost.LONG_COMMENTS), on -> Ghost.set(Ghost.LONG_COMMENTS, on)));
         column.addView(wrap(comments));
 
         column.addView(section(Text.TIKTOK_FEATURES));
@@ -476,6 +536,10 @@ public class SettingsActivity extends Activity {
         features.addView(line());
         features.addView(toggleRow("language", Text.TRANSLATE_COMMENTS, Flags.isOn(Flags.KEY_TRANSLATE_COMMENTS),
                 on -> Flags.set(Flags.KEY_TRANSLATE_COMMENTS, on)));
+        features.addView(line());
+        // the caption of a new video: TikTok stops at five hashtags
+        features.addView(liveToggleRow("tag", Local.of("Больше 5 хештегов в описании"),
+                Hashtags.on(), Hashtags::set));
         column.addView(wrap(features));
 
         column.addView(section(BURN));
@@ -536,6 +600,55 @@ public class SettingsActivity extends Activity {
         for(Plugins.Info info:installed)plugins.addView(pluginRow(info));
         column.addView(wrap(plugins));
 
+        column.addView(section(MESSAGES));
+        LinearLayout messages = card();
+        String inboxNow = InboxTitle.get(this);
+        messages.addView(actionRow("edit", Local.of("Название «Входящие»"),
+                inboxNow.isEmpty() ? null : inboxNow, this::changeInboxTitle));
+        messages.addView(line());
+        messages.addView(toggleRow("chat", Local.of("Папки в личных сообщениях"), ChatFolders.enabled(), ChatFolders::setEnabled));
+        messages.addView(line());
+        messages.addView(toggleRow("tune", Text.MD3_INBOX, Md3.isOn(Md3.KEY_INBOX), on -> Md3.set(Md3.KEY_INBOX, on)));
+        column.addView(wrap(messages));
+
+        // what stands in the inbox besides the chats, each piece on its own
+        column.addView(section(INBOX_CLEAN));
+        LinearLayout clean = card();
+        String[][] pieces = {
+                {InboxClean.STRIP, "visibility_off", Local.of("Скрыть полосу историй целиком")},
+                {InboxClean.CREATE, "add", Local.of("Скрыть «Создать» (свою историю)")},
+                {InboxClean.STORIES, "play_circle", Local.of("Скрыть истории друзей")},
+                {InboxClean.LIVE, "play_arrow", Local.of("Скрыть эфиры")},
+                {InboxClean.NOTES, "chat", Local.of("Скрыть заметки над аватарками")},
+                {InboxClean.EXTRAS, "view_compact", Local.of("Скрыть виджет и суперподписку в полосе")},
+                {InboxClean.SUGGESTED, "group", Local.of("Скрыть «Ваши вероятные знакомые»")}};
+        for (int i = 0; i < pieces.length; i++) {
+            final String key = pieces[i][0];
+            if (i > 0) clean.addView(line());
+            clean.addView(liveToggleRow(pieces[i][1], pieces[i][2], InboxClean.on(key), on -> InboxClean.set(key, on)));
+        }
+        column.addView(wrap(clean));
+
+        column.addView(section(GHOST));
+        LinearLayout ghost = card();
+        ghost.addView(quiet(Local.of("TikTok не узнает, что ты в сети, прочитал чат, печатаешь или смотрел историю и профиль. Чтобы скрыть «в сети», после включения перезапусти приложение.")));
+        ghost.addView(toggleRow("visibility_off", Local.of("Режим призрака"), Ghost.on(Ghost.KEY),
+                on -> Ghost.set(Ghost.KEY, on)));
+        if (Ghost.on(Ghost.KEY)) {
+            String[][] parts = {
+                    {Ghost.ONLINE, Local.of("Не показывать «в сети»")},
+                    {Ghost.READ, Local.of("Не отправлять «прочитано»")},
+                    {Ghost.TYPING, Local.of("Не отправлять «печатает»")},
+                    {Ghost.STORIES, Local.of("Не отмечать просмотр историй")},
+                    {Ghost.PROFILES, Local.of("Не отмечать посещение профилей")}};
+            for (String[] part : parts) {
+                final String key = part[0];
+                ghost.addView(line());
+                ghost.addView(liveToggleRow("eye_open", part[1], Ghost.on(key), on -> Ghost.set(key, on)));
+            }
+        }
+        column.addView(wrap(ghost));
+
         column.addView(section(Text.PINNED_FRIENDS));
         LinearLayout friends=card();friends.addView(actionRow("people",Text.PINNED_FRIENDS,null,()->PinnedFriends.show(this)));
         column.addView(wrap(friends));
@@ -581,9 +694,6 @@ public class SettingsActivity extends Activity {
         notifications.addView(actionRow("settings",Text.NOTIFY_SETTINGS,null,()->ModNotifications.settings(this)));
         column.addView(wrap(notifications));
 
-        column.addView(section(Text.CHANNEL));
-        column.addView(channelBanner());
-
         column.addView(section(Text.UPDATE));
         LinearLayout updates = card();
         updates.addView(actionRow("download", Text.UPDATE_CHECK,
@@ -601,7 +711,7 @@ public class SettingsActivity extends Activity {
 
         column.addView(section(Text.LINKS));
         LinearLayout links = card();
-        links.addView(linkRow("group", Text.FORUM, "@margeletforum", FORUM));
+        links.addView(linkRow("group", Text.CHANNEL, "@LotusTok", LOTUS_CHANNEL));
         links.addView(line());
         links.addView(linkRow("extension", Text.SOURCE, "narezany/MargyT", GIT));
         column.addView(wrap(links));
@@ -613,7 +723,7 @@ public class SettingsActivity extends Activity {
         diagnostics.addView(quiet(Diagnostics.report()));
         diagnostics.addView(line());
         diagnostics.addView(actionRow("article", Text.COPY_DIAGNOSTICS, null,
-                () -> copy("MargyT diagnostics", DevMode.isOn()
+                () -> copy("LotusTok diagnostics", DevMode.isOn()
                         ? Diagnostics.fullReport() : Diagnostics.report())));
         column.addView(wrap(diagnostics));
 
@@ -638,30 +748,18 @@ public class SettingsActivity extends Activity {
         donateAnchor = wrap(support);
         column.addView(donateAnchor);
 
-        column.addView(section(Text.FUN_DEP));
-        LinearLayout dep = card();
-        dep.addView(chipRow("flare", Text.FUN_DEP, new String[] {Text.CHIP_TEMPORARY, Text.CHIP_COLLAB},
-                this::openDep));
-        dep.addView(quiet(Text.DEP_NOTE));
-        dep.addView(line());
-        dep.addView(liveToggleRow("open_with", Text.DEP_FLOAT, DepFloat.isOn(this),
-                on -> DepFloat.set(this, on)));
-        column.addView(wrap(dep));
-
-        column.addView(section(Text.FUN_SCREAMERS));
-        LinearLayout screamers = card();
-        screamers.addView(liveToggleRow("animation", Text.FUN_SCREAMERS, Screamer.isOn(this),
-                on -> Screamer.set(this, on)));
-        screamers.addView(quiet(Text.SCREAMERS_NOTE));
-        screamers.addView(line());
-        screamers.addView(liveToggleRow("volume_up", Text.SCREAMER_SOUND, Screamer.loud(this),
-                on -> Screamer.setLoud(this, on)));
-        screamers.addView(line());
-        screamers.addView(actionRow("play_arrow", Text.SCREAMER_NOW, null, () -> Screamer.now(this)));
-        column.addView(wrap(screamers));
-
-        column.addView(section(Text.FUN_CAT));
-        column.addView(fatCat());
+        // The "fun" shelf (screamers) is switched off for now, kept here to be brought back.
+        // column.addView(section(Text.FUN_SCREAMERS));
+        // LinearLayout screamers = card();
+        // screamers.addView(liveToggleRow("animation", Text.FUN_SCREAMERS, Screamer.isOn(this),
+        //         on -> Screamer.set(this, on)));
+        // screamers.addView(quiet(Text.SCREAMERS_NOTE));
+        // screamers.addView(line());
+        // screamers.addView(liveToggleRow("volume_up", Text.SCREAMER_SOUND, Screamer.loud(this),
+        //         on -> Screamer.setLoud(this, on)));
+        // screamers.addView(line());
+        // screamers.addView(actionRow("play_arrow", Text.SCREAMER_NOW, null, () -> Screamer.now(this)));
+        // column.addView(wrap(screamers));
 
         filterGroup();
         column.addView(versions());
@@ -2057,6 +2155,26 @@ public class SettingsActivity extends Activity {
         return sized(row, 52);
     }
 
+    /** The settings of the bottom bar: what is shown in it, and how. */
+    /** The parts of the feed's Material 3 style, each switched on its own. */
+    private void showFeedMd3Settings() {
+        Panel panel = Panel.with(this, skin, Local.of("Элементы ленты"));
+        panel.text(Local.of("Работает, когда включена «Лента в стиле Material 3». Отключённый элемент остаётся таким, каким его рисует TikTok."));
+        panel.view(toggleRow("tune", Local.of("Подложка под описание"), Md3.partOn(Md3.PART_CAPTION), on -> Md3.setPart(Md3.PART_CAPTION, on)));
+        panel.view(toggleRow("tune", Local.of("Подложка под кнопками справа"), Md3.partOn(Md3.PART_COLUMN), on -> Md3.setPart(Md3.PART_COLUMN, on)));
+        panel.view(toggleRow("tune", Local.of("Сдвиг кнопок, аватара и обложки от края"), Md3.partOn(Md3.PART_SHIFT), on -> Md3.setPart(Md3.PART_SHIFT, on)));
+        panel.view(toggleRow("tune", Local.of("Капсула под вкладками сверху"), Md3.partOn(Md3.PART_TABS), on -> Md3.setPart(Md3.PART_TABS, on)));
+        panel.view(toggleRow("tune", Local.of("Круги у LIVE и поиска"), Md3.partOn(Md3.PART_DISCS), on -> Md3.setPart(Md3.PART_DISCS, on)));
+        panel.quiet(Local.of("Закрыть"), null).show();
+    }
+
+    private void showNavSettings() {
+        Panel panel = Panel.with(this, skin, Local.of("Нижняя панель"));
+        panel.view(toggleRow("label", Local.of("Название открытой вкладки"), NavBar.namesShown(), NavBar::setNamesShown));
+        panel.text(Local.of("Без названия вкладки видны одни иконки, и по ним труднее понять, куда ведёт кнопка."));
+        panel.quiet(Local.of("Закрыть"), null).show();
+    }
+
     private void askColour(String title, int initial, ColourPicked picked) {
         Panel panel = Panel.with(this,skin,title);
         EditText input = panel.field("#RRGGBB");
@@ -2215,6 +2333,12 @@ public class SettingsActivity extends Activity {
         return toggleRow(picture,title,on,setting,true);
     }
 
+    /** The panels of the feed that can be taken off: the four buttons beside a video, then the rest. */
+    private static final String[] PANELS={Text.RAIL_LIKE,Text.RAIL_COMMENT,Text.RAIL_FAV,Text.RAIL_SHARE,Text.RAIL_LIVE,
+            Text.RAIL_SEARCH,Text.RAIL_FOR_YOU,Text.RAIL_FOLLOWING,Text.RAIL_SERIES,Text.RAIL_DESC,Text.RAIL_NAME};
+    private static boolean panelShown(int i){return i<4?FeedRail.shown(i):FeedHide.shown(i-4);}
+    private static void panelSet(int i,boolean on){if(i<4)FeedRail.setShown(i,on);else FeedHide.setShown(i-4,on);}
+
     private View liveToggleRow(String picture, String title, boolean on, final Setting setting) {
         return toggleRow(picture,title,on,setting,false);
     }
@@ -2372,6 +2496,21 @@ public class SettingsActivity extends Activity {
     }
 
     /** A row that does something at once, rather than setting anything. */
+    /** The heading of the chat list, under a word of the person's own. */
+    private void changeInboxTitle() {
+        Panel panel = Panel.with(this, skin, Local.of("Название «Входящие»"));
+        panel.text(Local.of("Так будет называться заголовок списка чатов. Пустое поле вернёт обычное слово."));
+        final EditText input = panel.field(Local.of("Входящие"));
+        String now = InboxTitle.get(this);
+        if (!now.isEmpty()) input.setText(now);
+        panel.primary(Local.of("Сохранить"), () -> {
+            String value = input.getText().toString();
+            InboxTitle.set(this, value);
+            InboxTitle.changed(value);
+            rebuild();
+        }).quiet(Local.of("Назад"), null).show();
+    }
+
     private View actionRow(String picture, String title, String detail, final Runnable action) {
         LinearLayout row = row();
         row.addView(icon(picture));
@@ -2408,7 +2547,7 @@ public class SettingsActivity extends Activity {
         // the author and the licence live here as well: the licence asks that
         // a fork keep this line and the card that asks for support, rather
         // than moving the name into print nobody reads
-        view.setText((Version.LITE ? "MargyT Lite " : "MargyT ") + Version.MOD
+        view.setText((Version.LITE ? "LotusTok Lite " : "LotusTok ") + Version.MOD
                 + (Version.LITE ? " beta  ·  TikTok Lite " : "  ·  TikTok ") + Version.TIKTOK
                 + "\n" + Text.MADE_BY);
         view.setTextColor(skin.muted());
@@ -2765,49 +2904,75 @@ public class SettingsActivity extends Activity {
         rows.setPadding(0, dp(6), 0, dp(10));
 
         rows.addView(quiet(Text.THANKS_NOTE));
-        rows.addView(owner());
+        rows.addView(owner("@narezany", Text.THANKS_OWNER, OWNER_TELEGRAM, OWNER_TIKTOK));
+        rows.addView(owner("pikmis", Text.THANKS_MOD_OWNER, MOD_OWNER_TELEGRAM, MOD_OWNER_TIKTOK));
         rows.addView(person("Claude Opus 5", Text.THANKS_CLAUDE, null));
         rows.addView(person("someone's mf", Text.THANKS_TTCUZ, TTCUZ));
 
+        // Support: first MargyT, which LotusTok is built on, then LotusTok itself.
         rows.addView(line());
+        rows.addView(donateHeading(Local.of("Поддержать MargyT")));
+        rows.addView(quiet(Local.of("Реквизиты автора MargyT, на котором основан LotusTok. Это не наши реквизиты.")));
+        rows.addView(cardRow());
+        rows.addView(linkRow("star", Text.YOOMONEY, Text.YOOMONEY_NOTE, YOOMONEY));
 
+        rows.addView(line());
+        rows.addView(donateHeading(Local.of("Поддержать LotusTok")));
+        rows.addView(quiet(Local.of("Реквизиты команды LotusTok. Нажмите на адрес, чтобы скопировать.")));
+        rows.addView(walletRow("TON", WALLET_TON));
+        rows.addView(walletRow("TRON (TRC20)", WALLET_TRON));
+        return rows;
+    }
+
+    private View donateHeading(String words) {
         TextView heading = new TextView(this);
-        heading.setText(Text.DONATE);
+        heading.setText(words);
         heading.setTextColor(skin.text);
         heading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         heading.setPadding(dp(16), dp(14), dp(16), dp(2));
-        rows.addView(heading);
-
-        rows.addView(quiet(Text.DONATE_NOTE));
-
-        rows.addView(cardRow());
-
-        rows.addView(linkRow("star", Text.YOOMONEY, Text.YOOMONEY_NOTE, YOOMONEY));
-        return rows;
+        return heading;
     }
 
-    /** The one row with two places to go, so it asks which. */
-    private View owner() {
+    /** A wallet address: the name of the network, the address as it is, and a tap copies it. */
+    private View walletRow(final String network, final String address) {
+        LinearLayout wallet = row();
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        text.setPadding(0, dp(6), 0, dp(6));
+        text.addView(label(network));
+        TextView where = detail(address);
+        where.setSingleLine(false);
+        where.setMaxLines(3);
+        where.setPadding(0, dp(2), 0, 0);
+        text.addView(where);
+        text.addView(detail(Text.TAP_TO_COPY));
+        wallet.addView(text, grow());
+        wallet.setOnClickListener(v -> copy(network, address));
+        return sized(wallet, 76);
+    }
+
+    /** A row with two places to go, so it asks which: Telegram or TikTok. */
+    private View owner(final String name, String what, final String telegram, final String tiktok) {
         LinearLayout row = row();
 
         LinearLayout text = new LinearLayout(this);
         text.setOrientation(LinearLayout.VERTICAL);
-        text.addView(label("@narezany"));
-        text.addView(detail(Text.THANKS_OWNER));
+        text.addView(label(name));
+        text.addView(detail(what));
         row.addView(text, grow());
         row.addView(away());
 
         row.setOnClickListener(v -> {
             try {
                 new ModDialog.Builder(this, skin)
-                        .setTitle("@narezany")
+                        .setTitle(name)
                         .setItems(new CharSequence[]{"Telegram", "TikTok"}, (dialog, which) ->
-                                open(which == 0 ? OWNER_TELEGRAM : OWNER_TIKTOK))
+                                open(which == 0 ? telegram : tiktok))
                         .setNegativeButton(Text.CANCEL, null)
                         .show();
             } catch (Throwable error) {
-                open(OWNER_TELEGRAM);
+                open(telegram);
             }
         });
         return sized(row, 60);
@@ -2916,7 +3081,7 @@ public class SettingsActivity extends Activity {
         into.addView(actionRow("tune", Text.DEV_FLAGS, Text.DEV_FLAGS_NOTE, this::showFlags));
         into.addView(line());
         into.addView(actionRow("article", Text.DEV_FULL_REPORT, Text.DEV_FULL_NOTE,
-                () -> copy("MargyT full report", Diagnostics.fullReport())));
+                () -> copy("LotusTok full report", Diagnostics.fullReport())));
         into.addView(line());
         into.addView(toggleRow("tune", Text.DEV_SWITCH, true, on -> {
             if (!on) {
@@ -3318,12 +3483,12 @@ public class SettingsActivity extends Activity {
 
     private void copyDiary() {
         try {
-            StringBuilder out = new StringBuilder("MargyT\n");
+            StringBuilder out = new StringBuilder("LotusTok\n");
             if (DevMode.isOn()) out.append(Diagnostics.fullReport());
             else for (String line : Diary.lines()) out.append(line).append('\n');
             ClipboardManager clipboard =
                     (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-            clipboard.setPrimaryClip(ClipData.newPlainText("MargyT", out.toString()));
+            clipboard.setPrimaryClip(ClipData.newPlainText("LotusTok", out.toString()));
             Toast.makeText(this, Text.COPIED, Toast.LENGTH_SHORT).show();
         } catch (Throwable error) {
             Toast.makeText(this, String.valueOf(error), Toast.LENGTH_LONG).show();
@@ -3361,9 +3526,10 @@ public class SettingsActivity extends Activity {
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, settingsGroup == 0 ? 44 : 34);
         view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         view.setPadding(dp(28), dp(8), dp(24), dp(16));
-        // five taps in a row and a cat turns up; one by accident does nothing
+        if (settingsGroup == 0) view.setGravity(Gravity.CENTER_HORIZONTAL);
+        // The cat that meowed after five taps on a title is switched off for now.
         view.setOnClickListener(v -> {
-            Cats.tapped(view);
+            // Cats.tapped(view);
             developerTap();
         });
         return view;
@@ -3456,11 +3622,10 @@ public class SettingsActivity extends Activity {
                 panel.close();rebuild();Screen.say(Text.HIDDEN_NEXT_PAGE);
             }));
         }
-        String[] railNames={Text.RAIL_LIKE,Text.RAIL_COMMENT,Text.RAIL_FAV,Text.RAIL_SHARE};
-        for(int i=0;i<4;i++)if(!FeedRail.shown(i)){
+        for(int i=0;i<PANELS.length;i++)if(!panelShown(i)){
             final int kind=i;count++;
-            rows.addView(actionRow("visibility_off",railNames[i],Text.HIDDEN_RESTORE,()->{
-                FeedRail.setShown(kind,true);panel.close();rebuild();
+            rows.addView(actionRow("visibility_off",PANELS[i],Text.HIDDEN_RESTORE,()->{
+                panelSet(kind,true);panel.close();rebuild();
             }));
         }
         for(java.util.Map.Entry<Integer,String> card:FeedBlacklist.cards().entrySet()){
@@ -3477,7 +3642,7 @@ public class SettingsActivity extends Activity {
             panel.primary(Text.HIDDEN_RESTORE_ALL,()->{
                 Feed.setEnabled(false);Feed.setHides(Feed.KEY_LIVE,false);Feed.setHides(Feed.KEY_PHOTOS,false);
                 Feed.setHides(Feed.KEY_STORIES,false);Feed.setHides(Feed.KEY_SUGGESTIONS,false);FeedBlacklist.clear();
-                for(int i=0;i<4;i++)FeedRail.setShown(i,true);
+                for(int i=0;i<PANELS.length;i++)panelSet(i,true);
                 rebuild();
             });
         }
@@ -3497,8 +3662,7 @@ public class SettingsActivity extends Activity {
         found+=searchHit(results,Text.NOTIFICATIONS,Text.NOTIFY_MESSAGES+" "+Text.NOTIFY_PROMOS+" "+Text.NOTIFY_OTHER+" "+Text.NOTIFY_NO_PROMPTS+" "+Text.NOTIFY_SETTINGS,()->{});
         found+=searchHit(results,Text.VIDEO,Text.PLAYER_SPEED,()->{});
         found+=searchHit(results,Text.DOWNLOADS,Text.DL_QUALITY+" "+Text.FRAME_QUALITY,()->{});
-        String[] railNames={Text.RAIL_LIKE,Text.RAIL_COMMENT,Text.RAIL_FAV,Text.RAIL_SHARE};
-        for(int i=0;i<4;i++)found+=searchControl(results,Text.RAIL,railNames[i],FeedRail.shown(i));
+        for(int i=0;i<PANELS.length;i++)found+=searchControl(results,Text.RAIL,PANELS[i],panelShown(i));
         if(matchesSearch(Text.HIDDEN_ITEMS)){
             results.addView(actionRow("visibility_off",Text.HIDDEN_ITEMS,Text.HIDDEN_ITEMS_NOTE,this::showHiddenItems));found++;
         }
@@ -3595,17 +3759,17 @@ public class SettingsActivity extends Activity {
             case 6: return Local.of("Плагины");
             case 7: return Local.of("Друзья и чаты");
             case 8: return Text.FUN;
-            default: return "MargyT";
+            default: return "LotusTok";
         }
     }
 
     private void showSectionHelp() {
-        String[] notes = {"", Local.of("Акцент меняет цвет кнопок и вкладок. Готовые картинки могут сохранять свой цвет. Тема и шрифты настраиваются отдельно."),
-                Local.of("Значки, их порядок и градиент на ник. Чтобы что-то менять, аккаунт надо один раз подтвердить."),
+        String[] notes = {"", Local.of("Акцент меняет цвет кнопок и вкладок. Готовые картинки могут сохранять свой цвет. Тема и шрифты настраиваются отдельно. Редактор интерфейса правит любой экран TikTok."),
+                Local.of("Значки, их порядок и градиент на ник. Чтобы что-то менять, аккаунт надо один раз подтвердить. Здесь же вид профиля и удаление своих репостов."),
                 Local.of("Глаз меняет прозрачность кнопок поверх видео; «Защита экрана» теперь здесь же. Удержание «Отправить» открывает скачивание и перемотку. Удерживайте край видео, чтобы ускорить, и потяните вниз, чтобы закрепить скорость."),
                 Local.of("Скачивание, резервные копии, диагностика и журнал. Сохраните копию перед экспериментами."),
                 Local.of("Здесь находятся версия мода, обновления, журнал и участники."), Local.of("Магазин, установка и настройки плагинов. Плагины запускают дополнительный код; устанавливайте только те, которым доверяете."),
-                Local.of("Закреплённые друзья, автопродление серий и уведомления мода."),
+                Local.of("Название «Входящие», папки в сообщениях, закреплённые друзья, автопродление серий и уведомления мода."),
                 Text.FUN_HELP};
         Panel.with(this,skin,Local.of("Подсказки")).text(notes[Math.max(0,Math.min(notes.length-1,settingsGroup))])
                 .quiet(Local.of("Обучение"),() -> Tutorial.show(this)).primary(Local.of("Понятно"),null).show();
@@ -3614,15 +3778,16 @@ public class SettingsActivity extends Activity {
     private View groupNavigation() {
         LinearLayout list = card();
         String[] icons = {"palette", "group", "play_circle", "tune", "info", "extension", "chat", "flare"};
-        String[] notes = {Local.of("Акцент, тема и шрифты"),
-                Local.of("Значки, градиент и аккаунт"),
+        String[] notes = {Local.of("Акцент, тема, шрифты и редактор интерфейса"),
+                Local.of("Значки, градиент, аккаунт и репосты"),
                 Local.of("Просмотр, кнопки, защита экрана и регион"),
                 Local.of("Скачивание, копии и диагностика"),
                 Local.of("Версия, обновления и участники"), Local.of("Магазин и установленные"),
-                Local.of("Друзья, серии и уведомления"), Text.FUN_NOTE};
+                Local.of("Сообщения, друзья, серии и уведомления"), Text.FUN_NOTE};
         // Shelf order on screen: what people touch daily first, the project itself last.
         // Lite has the shelves that have something on them for it
-        int[] shelf = Version.LITE ? new int[] {1, 3, 2, 4, 8, 5} : new int[] {1, 2, 3, 7, 4, 6, 8, 5};
+        // shelf 8 (the fun one) is left out for now
+        int[] shelf = Version.LITE ? new int[] {1, 3, 2, 4, 5} : new int[] {1, 2, 3, 7, 4, 6, 5};
         for (int n = 0; n < shelf.length; n++) {
             final int i = shelf[n];
             final int chosen = i;
@@ -3654,16 +3819,18 @@ public class SettingsActivity extends Activity {
         if (section.equals(Text.FUN_DEP) || section.equals(Text.FUN_SCREAMERS)
                 || section.equals(Text.FUN_CAT)) return 8;
         if (section.equals(Text.PLUGINS)) return 6;
-        if (section.equals(Text.GRADIENT) || section.equals(Text.BADGES) || section.equals(Text.ACCOUNT)) return 2;
+        if (section.equals(Text.GRADIENT) || section.equals(Text.BADGES) || section.equals(Text.ACCOUNT)
+                || section.equals(MY_PROFILE)) return 2;
         if (section.equals(Text.APPEARANCE) || section.equals(Text.ACCENT)
-                || section.equals(Text.THEME) || section.equals(Text.FONT)) return 1;
+                || section.equals(Text.THEME) || section.equals(Text.FONT)
+                || section.equals(Local.of("Редактор интерфейса"))) return 1;
         if (section.equals(Text.REGION) || section.equals(Text.COUNTRY)
                 || section.equals(Text.FEED) || section.equals(Text.VIDEO)
                 || section.equals(Text.RAIL) || section.equals(Text.COMMENTS)
                 || section.equals(Text.TAGS) || section.equals(Text.FPS)
                 || section.equals(Text.TIKTOK_FEATURES)
                 || section.equals(BURN)) return 3;
-        if (section.equals(Text.PINNED_FRIENDS) || section.equals(Text.STREAKS)
+        if (section.equals(MESSAGES) || section.equals(INBOX_CLEAN) || section.equals(GHOST) || section.equals(Text.PINNED_FRIENDS) || section.equals(Text.STREAKS)
                 || section.equals(Text.NOTIFICATIONS)) return 7;
         if (section.equals(Text.THANKS) || section.equals(Text.UPDATE) || section.equals(Text.CHANNEL)
                 || section.equals(Text.LINKS)) return 5;
@@ -3698,6 +3865,10 @@ public class SettingsActivity extends Activity {
     }
 
     private static final String BURN = Local.of("Защита экрана");
+    private static final String MY_PROFILE = Local.of("Мой профиль");
+    private static final String MESSAGES = Local.of("Личные сообщения");
+    private static final String GHOST = Local.of("Призрак");
+    private static final String INBOX_CLEAN = Local.of("Входящие: что скрыть");
 
     private boolean navigating;
     private void goBack() {

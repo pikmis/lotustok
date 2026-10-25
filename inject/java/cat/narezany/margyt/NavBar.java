@@ -114,7 +114,9 @@ final class NavBar {
     /** How long a tab takes to open, in milliseconds. */
     private static final long OPENING = 350L;
     /** How often the colour under the bar is looked at again. */
-    private static final long LOOK_AGAIN = 400L;
+    private static final long LOOK_AGAIN = 200L;
+    /** How long the capsule takes to go from the colours of one page to those of the next. */
+    private static final long FADE = 320L;
     private static final int TRIES = 20;
     private static final long BETWEEN = 600L;
 
@@ -123,12 +125,31 @@ final class NavBar {
     static boolean isEnabled() {
         if (Version.LITE) return false;
         SharedPreferences prefs = prefs();
-        return prefs == null || prefs.getBoolean(KEY, true);
+        return prefs == null || prefs.getBoolean(KEY, false);
     }
 
     static void setEnabled(boolean on) {
         SharedPreferences prefs = prefs();
         if (prefs != null) prefs.edit().putBoolean(KEY, on).apply();
+    }
+
+    /** The name of the open tab is written beside its icon, or only the icon is shown. */
+    static final String KEY_NAMES = "nav_tab_names";
+    private static volatile Boolean names;
+
+    static boolean namesShown() {
+        Boolean known = names;
+        if (known != null) return known.booleanValue();
+        SharedPreferences prefs = prefs();
+        boolean value = prefs == null || prefs.getBoolean(KEY_NAMES, true);
+        names = Boolean.valueOf(value);
+        return value;
+    }
+
+    static void setNamesShown(boolean on) {
+        names = Boolean.valueOf(on);
+        SharedPreferences prefs = prefs();
+        if (prefs != null) prefs.edit().putBoolean(KEY_NAMES, on).apply();
     }
 
     private static SharedPreferences prefs() {
@@ -155,6 +176,7 @@ final class NavBar {
     private static long looked;
 
     private static final ViewTreeObserver.OnPreDrawListener EVERY_FRAME = () -> {
+        long probe = Probe.start();
         try {
             boolean on = isEnabled(), any = false;
             for (java.util.Map.Entry<View, Capsule> entry : BARS.entrySet()) {
@@ -174,6 +196,7 @@ final class NavBar {
         } catch (Throwable ignored) {
             // a bar taken apart in the middle of a frame is looked at again on the next
         }
+        Probe.stop(Probe.NAV_FRAME, probe);
         return true;
     };
 
@@ -378,6 +401,8 @@ final class NavBar {
         /** How faint the screen saver has made it. */
         float shown = 1f;
         float left, right;
+        /** Whether a finger is down on it: the state layer is drawn while it is. */
+        boolean pressed;
     }
 
     // ----------------------------------------------------------- the capsule
@@ -394,6 +419,11 @@ final class NavBar {
         private Tab[] tabs = new Tab[0];
         private boolean worn;
         private int ground = Color.BLACK, accent;
+        private static final int IDLE = 0, PILL = 1, LIT = 2, QUIET = 3, PRIMARY = 4;
+        /** What the capsule is drawn in now, what it was drawn in when the page changed, and what it is going to. */
+        private final int[] shown = new int[5], was = new int[5], going = new int[5];
+        private long fadeSince;
+        private boolean coloured;
         private Drawable sampledFrom;
         private long sampledAt;
         /** Until when the bar is back in sight after a touch where it was. */
@@ -405,6 +435,8 @@ final class NavBar {
         /** The background TikTok gave the bar, kept while the capsule is worn. */
         private Drawable own;
         private boolean ownKept;
+        /** TikTok's thin rule that sits just above the bar, put away while the capsule is worn. */
+        private final java.util.ArrayList<View> rules = new java.util.ArrayList<>();
         private Bitmap face;
         private android.graphics.BitmapShader faceShader;
         private final Paint facePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
@@ -412,13 +444,24 @@ final class NavBar {
         private Bitmap pixel;
         private Canvas pixelCanvas;
         private int wide, tall;
+        /** The phone's font size setting, as it was last read: type is in sp, so it follows it. */
+        private float font = 1f;
+
+        private float sp(float size) {
+            return size * unit * font;
+        }
+
+        /** A badge is a fixed 16dp tall, so what is written in it grows less than the rest. */
+        private float spSmall(float size) {
+            return size * unit * Math.min(font, 1.3f);
+        }
 
         Capsule(float unit) {
             this.unit = unit;
             line.setStyle(Paint.Style.STROKE);
-            words.setTextSize(13f * unit);
-            small.setTextSize(10.5f * unit);
-            small.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            words.setTextSize(sp(14f));
+            small.setTextSize(spSmall(11f));
+            small.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
             small.setTextAlign(Paint.Align.CENTER);
         }
 
@@ -435,9 +478,25 @@ final class NavBar {
             if (read) {
                 readAt = now;
                 animates = Motion.enabled(bar.getContext());
+                float scale = bar.getResources().getConfiguration().fontScale;
+                if (scale > 0f && scale != font) {
+                    font = scale;
+                    words.setTextSize(sp(14f));
+                    small.setTextSize(spSmall(11f));
+                    // every name is measured again, at its new size
+                    for (Tab tab : tabs) tab.name = null;
+                    changed = true;
+                }
             }
             boolean animated = animates;
             for (Tab tab : tabs) {
+                boolean down = tab.view.isPressed();
+                if (down != tab.pressed) {
+                    tab.pressed = down;
+                    changed = true;
+                }
+                // while a finger is down there is a frame after each one, so that lifting it is seen
+                if (down) moving = true;
                 float target = tab.view.isSelected() ? 1f : 0f;
                 if (target != tab.to) {
                     tab.from = tab.open;
@@ -542,6 +601,26 @@ final class NavBar {
                 accent = tint;
                 changed = true;
             }
+            // The colours follow the page the bar lies on, but not in one step: a light page and a dark one
+            // are not a cut from one to the other, the capsule goes over to the new colours as it is looked at.
+            int[] wanted = palette();
+            if (!coloured) {
+                coloured = true;
+                System.arraycopy(wanted, 0, shown, 0, wanted.length);
+                System.arraycopy(wanted, 0, going, 0, wanted.length);
+            } else if (!java.util.Arrays.equals(wanted, going)) {
+                System.arraycopy(shown, 0, was, 0, shown.length);
+                System.arraycopy(wanted, 0, going, 0, wanted.length);
+                fadeSince = now;
+            }
+            if (!java.util.Arrays.equals(shown, going)) {
+                float passed = animated && worn ? (now - fadeSince) / (float) FADE : 1f;
+                for (int k = 0; k < shown.length; k++) {
+                    shown[k] = passed >= 1f ? going[k] : mix(was[k], going[k], ease.getInterpolation(Math.max(0f, passed)));
+                }
+                changed = true;
+                if (passed < 1f) moving = true;
+            }
             if (bar.getWidth() != wide || bar.getHeight() != tall) {
                 wide = bar.getWidth();
                 tall = bar.getHeight();
@@ -553,15 +632,43 @@ final class NavBar {
                 worn = true;
                 changed = true;
             }
+            rule(bar);
             if (changed) arrange(bar);
             place();
             if (changed || moving) bar.invalidate();
         }
 
         /** The mod's bar was switched off: TikTok's is given back as it was. */
+        /**
+         * Puts away the thin rule TikTok draws just above the bar: a view
+         * a few pixels tall, as wide as the bar, whose bottom edge meets its top.
+         * Whatever was put away and no longer matches is given back.
+         */
+        private void rule(ViewGroup bar) {
+            java.util.ArrayList<View> found = new java.util.ArrayList<>();
+            android.view.ViewParent parent = bar.getParent();
+            if (parent instanceof ViewGroup) {
+                ViewGroup holder = (ViewGroup) parent;
+                for (int i = 0; i < holder.getChildCount(); i++) {
+                    View child = holder.getChildAt(i);
+                    if (child == bar || child.getVisibility() != View.VISIBLE) continue;
+                    int height = child.getHeight();
+                    if (height <= 0 || height > 3 * unit || child.getWidth() < bar.getWidth() * 0.8f) continue;
+                    if (child.getBottom() > bar.getTop() + 1 || child.getBottom() < bar.getTop() - 6 * unit) continue;
+                    found.add(child);
+                }
+            }
+            for (View old : rules) if (!found.contains(old)) old.setAlpha(1f);
+            for (View now : found) now.setAlpha(0f);
+            rules.clear();
+            rules.addAll(found);
+        }
+
         void leave(ViewGroup bar) {
             if (!worn) return;
             worn = false;
+            for (View old : rules) old.setAlpha(1f);
+            rules.clear();
             bar.getOverlay().remove(this);
             for (Tab tab : tabs) release(tab.view);
             tabs = new Tab[0];
@@ -623,6 +730,46 @@ final class NavBar {
             return Md3.under(bar) | 0xFF000000;
         }
 
+        /** The colours of the capsule on the page it lies on: Material 3's roles, taken from the page and the accent. */
+        private int[] palette() {
+            int ink = Md3.ink(ground);
+            int[] out = new int[5];
+            // there is no container: the buttons lie straight on the page, one tone up from it
+            out[IDLE] = mix(ground, ink, 0.08f);
+            out[PILL] = mix(ground, accent | 0xFF000000, 0.34f);
+            // the name and the icon of the open tab are 4.5:1 on its indicator, whatever the accent is
+            out[LIT] = readable(mix(accent | 0xFF000000, ink, 0.40f), out[PILL], ink, 4.5f);
+            out[QUIET] = readable(mix(out[IDLE], ink, 0.80f), out[IDLE], ink, 4.5f);
+            out[PRIMARY] = accent | 0xFF000000;
+            return out;
+        }
+
+        private final Path blob = new Path();
+        private final float[] radii = new float[8];
+
+        /**
+         * The corners of the button at `at` in a connected group (Material 3 Expressive): the two ends of the
+         * group are fully round on the outside, every other corner is small, and the button that is chosen is
+         * round all the way round. A button that is pressed squares off to the small corner, the shape morph.
+         */
+        private void corners(int at, float open, boolean pressed, float height) {
+            float full = height / 2f, small = 8f * unit;
+            float inner = small + (full - small) * open;
+            float left = at == 0 ? full : inner, right = at == tabs.length - 1 ? full : inner;
+            if (pressed) {
+                left = Math.min(left, small);
+                right = Math.min(right, small);
+            }
+            radii[0] = radii[1] = radii[6] = radii[7] = left;
+            radii[2] = radii[3] = radii[4] = radii[5] = right;
+        }
+
+        private void shape(Canvas canvas, RectF area, Paint paint) {
+            blob.rewind();
+            blob.addRoundRect(area, radii, Path.Direction.CW);
+            canvas.drawPath(blob, paint);
+        }
+
         /** Where everything goes along the bar, for how far open each tab is now. */
         private void arrange(ViewGroup bar) {
             if (tabs.length == 0) return;
@@ -631,9 +778,10 @@ final class NavBar {
                 top = 0f;
                 bottom = tall;
             }
-            float room = Math.min(bottom - top - 6f * unit, 52f * unit);
+            // the floating toolbar is 64dp tall where the bar has the room, and keeps 12dp from the sides
+            float room = Math.min(bottom - top - 6f * unit, 64f * unit);
             float middle = (top + bottom) / 2f;
-            body.set(8f * unit, middle - room / 2f, wide - 8f * unit, middle + room / 2f);
+            body.set(12f * unit, middle - room / 2f, wide - 12f * unit, middle + room / 2f);
             float inside = 4f * unit, left = body.left + inside, right = body.right - inside;
             int centre = tabs.length / 2;
             if (tabs.length % 2 == 1 && tabs[centre].kind == CREATE) {
@@ -655,9 +803,10 @@ final class NavBar {
             for (int i = from; i < to; i++) {
                 open[i - from] = tabs[i].open;
                 extra[i - from] = tabs[i].name == null || tabs[i].kind == CREATE ? 0f
-                        : tabs[i].nameWide + 8f * unit + badge(tabs[i]);
+                        : (namesShown() ? tabs[i].nameWide + 8f * unit : 0f) + badge(tabs[i]);
             }
-            float[] edges = NavPlan.edges(right - left, open, extra, 36f * unit);
+            // 48dp: Material 3's smallest touch target
+            float[] edges = NavPlan.edges(right - left, open, extra, 48f * unit);
             for (int i = from; i < to; i++) {
                 tabs[i].left = left + edges[i - from];
                 tabs[i].right = left + edges[i - from + 1];
@@ -689,23 +838,14 @@ final class NavBar {
             if (tabs.length == 0 || body.isEmpty() || away >= 1f) return;
             int veil = away > 0f ? canvas.saveLayerAlpha(body.left - unit, body.top - 8f * unit, body.right + unit,
                     body.bottom + unit, Math.round(255f * (1f - away))) : -1;
-            int ink = Md3.ink(ground);
-            int shell = mix(ground, ink, 0.07f), edge = mix(ground, ink, 0.15f);
-            int pill = mix(shell, accent | 0xFF000000, 0.30f);
-            int lit = mix(accent | 0xFF000000, ink, 0.40f);
-            int quiet = mix(shell, ink, 0.80f);
+            int idle = shown[IDLE], pill = shown[PILL], lit = shown[LIT], quiet = shown[QUIET], primary = shown[PRIMARY];
 
-            float round = body.height() / 2f;
-            fill.setColor(shell);
-            canvas.drawRoundRect(body, round, round, fill);
-            line.setStrokeWidth(unit);
-            line.setColor(edge);
-            box.set(body);
-            box.inset(unit / 2f, unit / 2f);
-            canvas.drawRoundRect(box, round, round, line);
+            // the buttons are 48dp tall, as many as fit of the 8dp it would like round them
+            float lift = Math.max(4f * unit, Math.min(8f * unit, (body.height() - 48f * unit) / 2f));
 
             float middle = body.centerY(), icon = 24f * unit, gap = 6f * unit;
-            for (Tab tab : tabs) {
+            for (int at = 0; at < tabs.length; at++) {
+                Tab tab = tabs[at];
                 int saved = -1;
                 if (tab.shown < 0.99f) {
                     saved = canvas.saveLayerAlpha(tab.left, body.top, tab.right, body.bottom,
@@ -713,34 +853,50 @@ final class NavBar {
                 }
                 float centre = (tab.left + tab.right) / 2f;
                 if (tab.kind == CREATE) {
-                    create(canvas, centre, middle, ink, lit);
+                    // a filled button of the same group: the same height and corners as the others
+                    float height = body.height() - 2f * lift;
+                    corners(at, 0f, tab.pressed, height);
+                    box.set(tab.left + unit, body.top + lift, tab.right - unit, body.bottom - lift);
+                    create(canvas, box, primary, tab.pressed);
                 } else {
-                    if (tab.open > 0.01f) {
-                        float half = (tab.right - tab.left) / 2f * (0.6f + 0.4f * tab.open);
-                        box.set(centre - half, body.top + 4f * unit, centre + half, body.bottom - 4f * unit);
-                        fill.setColor(pill);
-                        fill.setAlpha(Math.round(255f * Math.min(1f, tab.open * 1.5f)));
-                        canvas.drawRoundRect(box, box.height() / 2f, box.height() / 2f, fill);
-                    }
                     // a name too long for its tab is set a little smaller before it is cut short
                     float badge = badge(tab);
                     float room = Math.max(0f, tab.right - tab.left - 2f * 8f * unit - icon - gap - badge);
                     float shrink = tab.name == null || tab.nameWide <= room ? 1f : Math.max(0.82f, room / tab.nameWide);
-                    float text = tab.name == null ? 0f : Math.min(tab.nameWide * shrink, room);
-                    float content = icon + tab.open * (gap + text + badge);
+                    float text = tab.name == null || !namesShown() ? 0f : Math.min(tab.nameWide * shrink, room);
+                    float between = text > 0f ? gap : 0f;
+                    // the indicator is as wide as its tab; with no name beside the icon it is only as wide as the icon
+                    // and what follows it, with Material 3's 16dp on either side
+                    // a connected button group: every tab is a button, 2dp from the next. The one chosen
+                    // is fully round; the others have the group's small corners, and a button that is
+                    // pressed squares off to the smallest, which is the shape morph of Material 3 Expressive
+                    float half = (tab.right - tab.left) / 2f - unit;
+                    float height = body.height() - 2f * lift;
+                    corners(at, tab.open, tab.pressed, height);
+                    box.set(centre - half, body.top + lift, centre + half, body.bottom - lift);
+                    fill.setColor(mix(idle, pill, tab.open));
+                    shape(canvas, box, fill);
+                    if (tab.pressed) {
+                        // Material 3's state layer: the colour of what is on it, a tenth of it
+                        fill.setColor(mix(quiet, lit, tab.open));
+                        fill.setAlpha(26);
+                        shape(canvas, box, fill);
+                        fill.setAlpha(255);
+                    }
+                    float content = icon + tab.open * (between + text + badge);
                     float start = centre - content / 2f;
                     int colour = mix(quiet, lit, tab.open);
                     emblem(canvas, tab, start, middle - icon / 2f, icon, colour);
                     if (tab.name != null && tab.open > 0.05f && text > 0f) {
                         int clip = canvas.save();
                         canvas.clipRect(start + icon, body.top, Math.min(start + icon + gap + text, tab.right), body.bottom);
-                        words.setTextSize(13f * unit * shrink);
+                        words.setTextSize(sp(14f) * shrink);
                         words.setColor(colour);
                         words.setAlpha(Math.round(255f * tab.open));
                         Paint.FontMetrics metrics = words.getFontMetrics();
                         canvas.drawText(tab.name, start + icon + gap,
                                 middle - (metrics.ascent + metrics.descent) / 2f, words);
-                        words.setTextSize(13f * unit);
+                        words.setTextSize(sp(14f));
                         canvas.restoreToCount(clip);
                     }
                     if (tab.count != null) {
@@ -748,11 +904,11 @@ final class NavBar {
                         // it is open, where it is not over the first letters of it
                         float high = 16f * unit;
                         float shutLeft = start + icon - 9f * unit, shutUp = Math.max(body.top + unit, middle - icon / 2f - 5f * unit);
-                        float openLeft = start + icon + gap + text + 4f * unit, openUp = middle - high / 2f;
+                        float openLeft = start + icon + between + text + 4f * unit, openUp = middle - high / 2f;
                         number(canvas, tab.count, shutLeft + (openLeft - shutLeft) * tab.open,
-                                shutUp + (openUp - shutUp) * tab.open, mix(shell, pill, tab.open));
+                                shutUp + (openUp - shutUp) * tab.open, mix(idle, pill, tab.open));
                     }
-                    else if (tab.dot) spot(canvas, start + icon - 2f * unit, middle - icon / 2f + 3f * unit, shell);
+                    else if (tab.dot) spot(canvas, start + icon - 2f * unit, middle - icon / 2f + 3f * unit, idle);
                 }
                 if (saved >= 0) canvas.restoreToCount(saved);
             }
@@ -805,17 +961,21 @@ final class NavBar {
             canvas.restoreToCount(saved);
         }
 
-        /** The button that makes a video: TikTok's two-coloured lozenge, in the colours of the theme. */
-        private void create(Canvas canvas, float centre, float middle, int ink, int lit) {
-            float half = 15f * unit, round = 11f * unit;
-            fill.setColor(lit);
-            box.set(centre - 24f * unit, middle - half, centre + 24f * unit, middle + half);
-            canvas.drawRoundRect(box, round, round, fill);
-            fill.setColor(ink);
-            box.set(centre - 20f * unit, middle - half, centre + 20f * unit, middle + half);
-            canvas.drawRoundRect(box, round, round, fill);
+        /** The button that makes a video: a filled button of the group, in the accent, with a plus on it. */
+        private void create(Canvas canvas, RectF area, int primary, boolean pressed) {
+            float centre = area.centerX(), middle = area.centerY();
+            // the plus is as readable on the accent as white or near-black can make it
+            int on = contrast(0xFFFFFFFF, primary) >= contrast(0xFF161823, primary) ? 0xFFFFFFFF : 0xFF161823;
+            fill.setColor(primary);
+            shape(canvas, area, fill);
+            if (pressed) {
+                fill.setColor(on);
+                fill.setAlpha(26);
+                shape(canvas, area, fill);
+                fill.setAlpha(255);
+            }
             line.setStrokeWidth(2.4f * unit);
-            line.setColor(bright(ink) < 0.5f ? 0xFFFFFFFF : 0xFF161823);
+            line.setColor(on);
             line.setStrokeCap(Paint.Cap.ROUND);
             canvas.drawLine(centre - 6.5f * unit, middle, centre + 6.5f * unit, middle, line);
             canvas.drawLine(centre, middle - 6.5f * unit, centre, middle + 6.5f * unit, line);
@@ -834,23 +994,48 @@ final class NavBar {
             fill.setColor(around);
             canvas.drawRoundRect(box, box.height() / 2f, box.height() / 2f, fill);
             box.set(left, up, left + across, up + high);
-            fill.setColor(accent | 0xFF000000);
+            fill.setColor(alert());
             canvas.drawRoundRect(box, high / 2f, high / 2f, fill);
-            small.setColor(bright(accent) < 0.6f ? 0xFFFFFFFF : 0xFF161823);
+            small.setColor(0xFFFFFFFF);
             Paint.FontMetrics metrics = small.getFontMetrics();
             canvas.drawText(count, box.centerX(), box.centerY() - (metrics.ascent + metrics.descent) / 2f, small);
         }
 
+        /** Material 3's error red, the same on a dark page and on a light one: what a badge is filled with (white is 4.6:1 on it). */
+        private int alert() {
+            return 0xFFD93025;
+        }
+
         private void spot(Canvas canvas, float x, float y, int around) {
             fill.setColor(around);
-            canvas.drawCircle(x, y, 5.5f * unit, fill);
-            fill.setColor(accent | 0xFF000000);
-            canvas.drawCircle(x, y, 4f * unit, fill);
+            canvas.drawCircle(x, y, 4.5f * unit, fill);
+            fill.setColor(alert());
+            canvas.drawCircle(x, y, 3f * unit, fill);
         }
 
         @Override public void setAlpha(int alpha) {}
         @Override public void setColorFilter(ColorFilter filter) {}
         @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    }
+
+    private static float luminance(int colour) {
+        float[] channel = {Color.red(colour) / 255f, Color.green(colour) / 255f, Color.blue(colour) / 255f};
+        for (int i = 0; i < 3; i++) {
+            channel[i] = channel[i] <= 0.03928f ? channel[i] / 12.92f : (float) Math.pow((channel[i] + 0.055f) / 1.055f, 2.4f);
+        }
+        return 0.2126f * channel[0] + 0.7152f * channel[1] + 0.0722f * channel[2];
+    }
+
+    /** How well one colour reads on another, from 1 to 21 (WCAG). */
+    static float contrast(int one, int other) {
+        float a = luminance(one), b = luminance(other);
+        return (Math.max(a, b) + 0.05f) / (Math.min(a, b) + 0.05f);
+    }
+
+    /** A colour moved toward another, a tenth at a time, until it reads on what it lies on at least as well as is asked. */
+    static int readable(int colour, int on, int toward, float least) {
+        for (int step = 0; step < 10 && contrast(colour, on) < least; step++) colour = mix(colour, toward, 0.1f);
+        return colour;
     }
 
     static float bright(int colour) {

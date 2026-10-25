@@ -77,11 +77,31 @@ public final class Dates {
         }catch(Throwable error){Diary.note("visible date: "+error);}
     }
 
+    /** How the date under the author is written. */
+    public static final String STYLE_KEY = "date_style";
+    public static final int STYLE_AGO_TWO = 0, STYLE_AGO_ONE = 1, STYLE_DATE = 2;
+
+    public static int style() {
+        SharedPreferences prefs = prefs();
+        return prefs == null ? STYLE_AGO_TWO : prefs.getInt(STYLE_KEY, STYLE_AGO_TWO);
+    }
+
+    public static void setStyle(int value) {
+        SharedPreferences prefs = prefs();
+        if (prefs != null) prefs.edit().putInt(STYLE_KEY, value).apply();
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(()->DateOverlay.update());
+    }
+
+    /** Under the author: how long ago it was published, or the date itself, as set in the settings. The full date is in the sheet a tap opens. */
     static String label(long seconds,long now) {
         if (seconds>100000000000L) seconds/=1000L;
         if (seconds<1000000000L || seconds>now+86400L) return null;
-        return new java.text.SimpleDateFormat("dd.MM.yyyy",java.util.Locale.getDefault())
-                .format(new java.util.Date(seconds*1000L));
+        int style = style();
+        if (style == STYLE_DATE) {
+            return new java.text.SimpleDateFormat("dd.MM.yyyy",java.util.Locale.getDefault())
+                    .format(new java.util.Date(seconds*1000L));
+        }
+        return DateInfo.ago(seconds, now, style == STYLE_AGO_ONE ? 1 : 2);
     }
 
     private static SharedPreferences prefs() {

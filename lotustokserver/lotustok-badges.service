@@ -1,0 +1,22 @@
+[Unit]
+Description=LotusTok badge server
+After=network.target
+
+[Service]
+User=lotustok
+Group=lotustok
+WorkingDirectory=/opt/lotustok
+EnvironmentFile=/etc/lotustok.env
+ExecStart=/usr/bin/python3 /opt/lotustok/badges.py
+Restart=always
+RestartSec=3
+
+# the service only needs its own folder
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/lotustok
+
+[Install]
+WantedBy=multi-user.target
