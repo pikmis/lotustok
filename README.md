@@ -1,15 +1,16 @@
 <div align="center">
 
-<img src="assets/banner.png" alt="MargyT" width="640">
+<img src="assets/lotustok_banner.png" alt="LotusTok" width="640">
 
 **A TikTok mod for Android.**
-The second in the line after [Margy](https://github.com/narezany/Margelet).
+Based on [MargyT](https://git.narez.xyz/narezany/MargyT).
 Built from the official apk with the patches in this repository.
 
-[![channel](https://img.shields.io/badge/channel-margytiktok-8DD1B0?style=flat-square)](https://t.me/margytiktok)
-[![forum](https://img.shields.io/badge/forum-margeletforum-8DD1B0?style=flat-square)](https://t.me/margeletforum)
-[![plugins](https://img.shields.io/badge/plugins-docs-8DD1B0?style=flat-square)](docs/plugins.md)
-[![licence](https://img.shields.io/badge/licence-MIT-8DD1B0?style=flat-square)](#licence)
+[![channel](https://img.shields.io/badge/channel-LotusTok-0A0A0A?style=flat-square)](https://t.me/LotusTok)
+[![forum](https://img.shields.io/badge/forum-lotustokforum-0A0A0A?style=flat-square)](https://t.me/lotustokforum)
+[![faq](https://img.shields.io/badge/faq-lotustokfaq-0A0A0A?style=flat-square)](https://t.me/lotustokfaq)
+[![plugins](https://img.shields.io/badge/plugins-docs-0A0A0A?style=flat-square)](docs/plugins.md)
+[![licence](https://img.shields.io/badge/licence-GPL--3.0-0A0A0A?style=flat-square)](#licence)
 
 </div>
 
