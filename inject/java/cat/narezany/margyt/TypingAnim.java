@@ -70,16 +70,16 @@ public final class TypingAnim {
     }
 
     static int curve() {
-        return number(CURVE, 1, 3);
+        return number(CURVE, 3, 4);
     }
 
     static void nextCurve() {
         SharedPreferences prefs = prefs();
-        if (prefs != null) prefs.edit().putInt(CURVE, (curve() + 1) % 3).apply();
+        if (prefs != null) prefs.edit().putInt(CURVE, (curve() + 1) % 4).apply();
     }
 
     static String curveName() {
-        return new String[] {Local.of("мягкая"), Local.of("пружина"), Local.of("резкая")}[curve()];
+        return new String[] {Local.of("мягкая"), Local.of("пружина"), Local.of("резкая"), Local.of("выскок")}[curve()];
     }
 
     private static float ease(float t) {
@@ -91,6 +91,8 @@ public final class TypingAnim {
             }
             case 2:
                 return 1f - left * left * left * left * left;
+            case 3:
+                return 1f - (float) (Math.exp(-5.2 * t) * Math.cos(2.0 * Math.PI * 1.35 * t));
             default:
                 return 1f - left * left * left;
         }
@@ -209,7 +211,7 @@ public final class TypingAnim {
             if (!on(ON) || count <= before || count - before > 24) return;
             int from = start + before, to = Math.min(text.length(), start + count);
             if (from >= to) return;
-            text.setSpan(new Pop(SystemClock.uptimeMillis(), DURATIONS[speed()], view.getTextSize(), view.getPaint()),
+            text.setSpan(new Pop(SystemClock.uptimeMillis(), curve() == 3 ? DURATIONS[speed()] * 3 / 2 : DURATIONS[speed()], view.getTextSize(), view.getPaint()),
                     from, to, Editable.SPAN_EXCLUSIVE_EXCLUSIVE);
             view.removeCallbacks(tick);
             view.postOnAnimation(tick);
@@ -280,7 +282,7 @@ public final class TypingAnim {
             canvas.translate(x + width / 2f, y);
             if (on(SLIDE)) canvas.translate(0f, size * 0.7f * (1f - e));
             if (on(SCALE)) {
-                float s = 0.2f + 0.8f * e;
+                float s = Math.max(0.05f, curve() == 3 ? e : 0.2f + 0.8f * e);
                 canvas.scale(s, s);
             }
             if (on(ROTATE)) canvas.rotate(tilt * (1f - e));
