@@ -132,8 +132,7 @@ public final class TypingAnim {
             }
             boolean glide = on(ON) && on(CURSOR);
             if (glide != (view.getTag(TAG_CARET) != null)) {
-                view.setTag(TAG_CARET, glide ? Boolean.TRUE : null);
-                edit.setCursorVisible(!glide);
+                caret(edit, glide);
             }
             if (glide || ((Watcher) view.getTag(TAG_WATCHED)).layer.busy()) view.postInvalidateOnAnimation();
             return;
@@ -144,13 +143,32 @@ public final class TypingAnim {
         }
     }
 
+    private static final int TAG_CARET_WAS = 0x7f5a0124;
+
+    private static void caret(EditText edit, boolean hide) {
+        edit.setTag(TAG_CARET, hide ? Boolean.TRUE : null);
+        edit.setCursorVisible(!hide);
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            if (hide) {
+                if (edit.getTag(TAG_CARET_WAS) == null) edit.setTag(TAG_CARET_WAS, new Object[] {edit.getTextCursorDrawable()});
+                android.graphics.drawable.GradientDrawable none = new android.graphics.drawable.GradientDrawable();
+                none.setColor(0);
+                none.setSize(1, 1);
+                edit.setTextCursorDrawable(none);
+            } else {
+                Object[] was = (Object[]) edit.getTag(TAG_CARET_WAS);
+                if (was != null) {
+                    edit.setTextCursorDrawable((Drawable) was[0]);
+                    edit.setTag(TAG_CARET_WAS, null);
+                }
+            }
+        }
+    }
+
     private static void release(View view, int depth) {
         if (depth > 60 || view == null) return;
         if (view instanceof EditText) {
-            if (view.getTag(TAG_CARET) != null) {
-                view.setTag(TAG_CARET, null);
-                ((EditText) view).setCursorVisible(true);
-            }
+            if (view.getTag(TAG_CARET) != null) caret((EditText) view, false);
             return;
         }
         if (view instanceof ViewGroup) {
@@ -241,12 +259,13 @@ public final class TypingAnim {
         public void draw(Canvas canvas, CharSequence text, int start, int end, float x, int top, int y, int bottom, Paint paint) {
             float t = Math.max(0f, Math.min(1f, (SystemClock.uptimeMillis() - began) / (float) length));
             float e = ease(t);
-            float calm = Math.max(0f, Math.min(1f, t * 1.6f));
+            float calm = Math.max(0f, Math.min(1f, t * 3.2f));
             float width = paint.measureText(text, start, end);
             draw.set(paint);
-            draw.setAlpha(Math.round(paint.getAlpha() * (1f - (1f - calm) * (1f - calm))));
+            draw.setAlpha(paint.getAlpha());
+            draw.setAlpha(Math.round(paint.getAlpha() * calm));
             if (on(BLUR)) {
-                int radius = Math.round(size * 0.2f * (1f - calm));
+                int radius = Math.round(size * 0.07f * (1f - Math.min(1f, t * 2f)));
                 if (radius >= 1) {
                     if (filter == null || filterRadius != radius) {
                         filter = new BlurMaskFilter(radius, BlurMaskFilter.Blur.NORMAL);
@@ -259,9 +278,9 @@ public final class TypingAnim {
             }
             canvas.save();
             canvas.translate(x + width / 2f, y);
-            if (on(SLIDE)) canvas.translate(0f, size * 0.55f * (1f - e));
+            if (on(SLIDE)) canvas.translate(0f, size * 0.7f * (1f - e));
             if (on(SCALE)) {
-                float s = 0.4f + 0.6f * e;
+                float s = 0.2f + 0.8f * e;
                 canvas.scale(s, s);
             }
             if (on(ROTATE)) canvas.rotate(tilt * (1f - e));
