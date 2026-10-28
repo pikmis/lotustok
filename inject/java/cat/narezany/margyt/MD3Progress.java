@@ -47,8 +47,47 @@ final class MD3Progress {
         }
     }
 
+    static volatile boolean fingerDown;
+    static volatile float fingerAt;
+    static volatile int fingerSeq;
+    private static final int TAG_WATCHED = 0x7f5a0111;
+
+    private static void watchFinger(Activity activity) {
+        try {
+            final android.view.Window window = activity.getWindow();
+            if (window.getDecorView().getTag(TAG_WATCHED) != null) return;
+            final android.view.Window.Callback original = window.getCallback();
+            if (original == null) return;
+            window.getDecorView().setTag(TAG_WATCHED, Boolean.TRUE);
+            window.setCallback((android.view.Window.Callback) java.lang.reflect.Proxy.newProxyInstance(
+                    android.view.Window.Callback.class.getClassLoader(), new Class<?>[] {android.view.Window.Callback.class},
+                    new java.lang.reflect.InvocationHandler() {
+                        @Override
+                        public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] args) throws Throwable {
+                            if (method.getName().equals("dispatchTouchEvent") && args != null && args[0] instanceof android.view.MotionEvent) {
+                                int action = ((android.view.MotionEvent) args[0]).getActionMasked();
+                                fingerAt = ((android.view.MotionEvent) args[0]).getRawX()
+                                        / Math.max(1f, window.getDecorView().getResources().getDisplayMetrics().widthPixels);
+                                if (action == android.view.MotionEvent.ACTION_DOWN) {
+                                    fingerDown = true;
+                                    fingerSeq++;
+                                }
+                                else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) fingerDown = false;
+                            }
+                            try {
+                                return method.invoke(original, args);
+                            } catch (java.lang.reflect.InvocationTargetException error) {
+                                throw error.getCause();
+                            }
+                        }
+                    }));
+        } catch (Throwable ignored) {
+        }
+    }
+
     static void attach(Activity activity) {
         if (activity == null) return;
+        watchFinger(activity);
         final View root = activity.getWindow().getDecorView();
         root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -77,6 +116,7 @@ final class MD3Progress {
                 // in the feed the wave is on each page's thin line; elsewhere there is no thin line,
                 // and the wave goes over the seek bar
                 if (!under(view, TAB_HOST)) applyOver(view);
+                if (view.getWidth() >= view.getResources().getDisplayMetrics().widthPixels * 0.9f) applyScrub(view);
             }
             return;
         }
@@ -126,6 +166,55 @@ final class MD3Progress {
     }
 
     /** A video opened from a profile, the favourites, the reposts or a chat: the wave over its seek bar. */
+    private static long scrubAsked;
+    private static boolean scrubNow;
+
+    static boolean scrubbing(View root) {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - scrubAsked < 80L) return scrubNow;
+        scrubAsked = now;
+        scrubNow = clock(root, 0);
+        return scrubNow;
+    }
+
+    private static boolean clock(View view, int depth) {
+        if (depth > 40 || view == null || view.getVisibility() != View.VISIBLE || view.getAlpha() < 0.2f) return false;
+        if (view instanceof android.widget.TextView) {
+            android.widget.TextView text = (android.widget.TextView) view;
+            if (text.getHeight() > 0 && text.getTextSize() > 24f * view.getResources().getDisplayMetrics().density
+                    && text.getText() != null && text.getText().toString().matches("\\s*\\d{1,2}:\\d{2}\\s*")) return true;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) if (clock(group.getChildAt(i), depth + 1)) return true;
+        }
+        return false;
+    }
+
+    private static final java.util.WeakHashMap<View, Boolean> scrubDone = new java.util.WeakHashMap<View, Boolean>();
+
+    private static void applyScrub(View seek) {
+        synchronized (scrubDone) {
+            if (scrubDone.containsKey(seek)) return;
+            scrubDone.put(seek, Boolean.TRUE);
+        }
+        try {
+            View content = seek.getRootView().findViewById(android.R.id.content);
+            if (!(content instanceof FrameLayout)) {
+                forget(seek);
+                return;
+            }
+            WavyBar wavy = new WavyBar(seek.getContext(), seek, true);
+            wavy.setClickable(false);
+            ((FrameLayout) content).addView(wavy, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        } catch (Throwable error) {
+            synchronized (scrubDone) {
+                scrubDone.remove(seek);
+            }
+        }
+    }
+
     private static void applyOver(View seek) {
         synchronized (done) {
             if (done.containsKey(seek)) return;

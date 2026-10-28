@@ -525,6 +525,29 @@ public class SettingsActivity extends Activity {
                 Ghost.on(Ghost.LONG_COMMENTS), on -> Ghost.set(Ghost.LONG_COMMENTS, on)));
         column.addView(wrap(comments));
 
+        column.addView(section(TYPING));
+        LinearLayout typing = card();
+        typing.addView(quiet(Local.of("Буквы появляются плавно, пока вы печатаете, в комментариях и сообщениях.")));
+        typing.addView(liveToggleRow("edit", Local.of("Анимация набора текста"), TypingAnim.on(TypingAnim.ON),
+                on -> {
+                    TypingAnim.set(TypingAnim.ON, on);
+                    rebuildAfterSwitchAnimation();
+                }));
+        if (TypingAnim.on(TypingAnim.ON)) {
+            typing.addView(line());
+            typing.addView(liveToggleRow("visibility_off", Local.of("Размытие при появлении"), TypingAnim.on(TypingAnim.BLUR),
+                    on -> TypingAnim.set(TypingAnim.BLUR, on)));
+            typing.addView(line());
+            typing.addView(liveToggleRow("expand_more", Local.of("Подъём снизу"), TypingAnim.on(TypingAnim.SLIDE),
+                    on -> TypingAnim.set(TypingAnim.SLIDE, on)));
+            typing.addView(line());
+            typing.addView(actionRow("speed", Local.of("Скорость"), TypingAnim.speedName(), () -> {
+                TypingAnim.nextSpeed();
+                rebuild();
+            }));
+        }
+        column.addView(wrap(typing));
+
         column.addView(section(Text.TIKTOK_FEATURES));
         LinearLayout features = card();
         features.addView(quiet(Text.TIKTOK_FEATURES_NOTE));
@@ -3829,6 +3852,7 @@ public class SettingsActivity extends Activity {
                 || section.equals(Text.RAIL) || section.equals(Text.COMMENTS)
                 || section.equals(Text.TAGS) || section.equals(Text.FPS)
                 || section.equals(Text.TIKTOK_FEATURES)
+                || section.equals(TYPING)
                 || section.equals(BURN)) return 3;
         if (section.equals(MESSAGES) || section.equals(INBOX_CLEAN) || section.equals(GHOST) || section.equals(Text.PINNED_FRIENDS) || section.equals(Text.STREAKS)
                 || section.equals(Text.NOTIFICATIONS)) return 7;
@@ -3868,6 +3892,7 @@ public class SettingsActivity extends Activity {
     private static final String MY_PROFILE = Local.of("Мой профиль");
     private static final String MESSAGES = Local.of("Личные сообщения");
     private static final String GHOST = Local.of("Призрак");
+    private static final String TYPING = Local.of("Анимация набора");
     private static final String INBOX_CLEAN = Local.of("Входящие: что скрыть");
 
     private boolean navigating;

@@ -195,7 +195,7 @@ public final class ViewEditor {
         parse(copy);
         for (View v : new ArrayList<View>(tracked.keySet())) {
             if (v == null) continue;
-            Rule rule = rules.get(keyOf(v));
+            Rule rule = ruleOf(v);
             if (rule == null || rule.empty()) {
                 release(v);
                 tracked.remove(v);
@@ -248,7 +248,41 @@ public final class ViewEditor {
         return up instanceof ViewGroup ? lead + "[" + ((ViewGroup) up).indexOfChild(v) + "]" : lead;
     }
 
+    private static int sameKind(View v) {
+        Object up = v.getParent();
+        if (!(up instanceof ViewGroup)) return 0;
+        ViewGroup group = (ViewGroup) up;
+        int n = 0;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View other = group.getChildAt(i);
+            if (other == v) return n;
+            if (other.getClass() == v.getClass()) n++;
+        }
+        return n;
+    }
+
     static String keyOf(View v) {
+        String lead = lead(v);
+        if (lead.charAt(0) == '#') return lead;
+        StringBuilder key = new StringBuilder(lead).append('{').append(sameKind(v)).append('}');
+        Object up = v.getParent();
+        for (int i = 0; i < 5 && up instanceof View; i++) {
+            View view = (View) up;
+            String name = lead(view);
+            key.append('<').append(name);
+            if (name.charAt(0) == '#') break;
+            key.append('{').append(sameKind(view)).append('}');
+            up = view.getParent();
+        }
+        return key.toString();
+    }
+
+    private static Rule ruleOf(View v) {
+        Rule rule = ruleOf(v);
+        return rule != null ? rule : rules.get(legacyKey(v));
+    }
+
+    private static String legacyKey(View v) {
         StringBuilder key = new StringBuilder(seg(v));
         Object up = v.getParent();
         for (int i = 0; i < 2 && up instanceof View; i++) {
@@ -347,15 +381,15 @@ public final class ViewEditor {
 
     private static void hide(View v, boolean hide) {
         if (hide) {
-            if (v.getVisibility() != View.GONE) {
+            if (v.getVisibility() != View.INVISIBLE) {
                 v.setTag(PRIOR, Integer.valueOf(v.getVisibility()));
-                v.setVisibility(View.GONE);
+                v.setVisibility(View.INVISIBLE);
             }
         } else {
             Object before = v.getTag(PRIOR);
             if (before instanceof Integer) {
                 v.setTag(PRIOR, null);
-                if (v.getVisibility() == View.GONE) v.setVisibility(((Integer) before).intValue());
+                if (v.getVisibility() == View.INVISIBLE) v.setVisibility(((Integer) before).intValue());
             }
         }
     }
@@ -400,7 +434,7 @@ public final class ViewEditor {
     private static void walk(View v, int depth) {
         if (depth > 60) return;
         if (leads.contains(lead(v)) && !tracked.containsKey(v)) {
-            Rule rule = rules.get(keyOf(v));
+            Rule rule = ruleOf(v);
             if (rule != null) {
                 tracked.put(v, rule);
                 enforce(v, rule);
@@ -469,10 +503,10 @@ public final class ViewEditor {
             View view = decor.get();
             if (view == null || rules.isEmpty()) return;
             long now = SystemClock.uptimeMillis();
-            if (now - looked < 250L) {
+            if (now - looked < 90L) {
                 if (!owed) {
                     owed = true;
-                    view.postDelayed(later, 280L);
+                    view.postDelayed(later, 100L);
                 }
                 return;
             }
@@ -492,6 +526,7 @@ public final class ViewEditor {
 
         @Override
         public boolean onPreDraw() {
+            if (!rules.isEmpty() && SystemClock.uptimeMillis() - looked >= 90L) look();
             frame();
             return true;
         }
@@ -645,6 +680,7 @@ public final class ViewEditor {
         private float lastX, lastY, downX, downY;
         private boolean moved;
         private float dragDx, dragDy, dragLeft, dragTop;
+        private final android.view.ScaleGestureDetector pinch;
         private final int[] where = new int[2];
         private final Rect box = new Rect();
 
@@ -657,6 +693,31 @@ public final class ViewEditor {
             frame.setStyle(Paint.Style.STROKE);
             frame.setStrokeWidth(2f * unit);
             glass.setStyle(Paint.Style.FILL);
+            pinch = new android.view.ScaleGestureDetector(activity, new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                @Override
+                public boolean onScaleBegin(android.view.ScaleGestureDetector d) {
+                    if (mode != MOVE || selected() == null) return false;
+                    remember();
+                    return true;
+                }
+
+                @Override
+                public boolean onScale(android.view.ScaleGestureDetector d) {
+                    View v = selected();
+                    if (v == null) return false;
+                    Rule rule = ruleFor(v);
+                    rule.scale = Math.max(0.3f, Math.min(3f, rule.scale * d.getScaleFactor()));
+                    refresh(rule);
+                    invalidate();
+                    return true;
+                }
+
+                @Override
+                public void onScaleEnd(android.view.ScaleGestureDetector d) {
+                    save();
+                    rebuild();
+                }
+            });
             card = new LinearLayout(activity);
             card.setOrientation(LinearLayout.VERTICAL);
             GradientDrawable back = new GradientDrawable();
@@ -769,7 +830,22 @@ public final class ViewEditor {
         @Override
         public boolean onTouchEvent(MotionEvent e) {
             if (mode == USE) return false;
-            switch (e.getActionMasked()) {
+            int act = e.getActionMasked();
+            if (mode == MOVE) {
+                if (act == MotionEvent.ACTION_DOWN) card.animate().alpha(0.2f).setDuration(120L).start();
+                else if (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) card.animate().alpha(1f).setDuration(160L).start();
+                pinch.onTouchEvent(e);
+                if (pinch.isInProgress()) {
+                    moved = true;
+                    return true;
+                }
+                if (act == MotionEvent.ACTION_POINTER_UP) {
+                    downX = lastX = e.getRawX();
+                    downY = lastY = e.getRawY();
+                    return true;
+                }
+            }
+            switch (act) {
                 case MotionEvent.ACTION_DOWN:
                     downX = lastX = e.getRawX();
                     downY = lastY = e.getRawY();
@@ -858,7 +934,7 @@ public final class ViewEditor {
 
         private Rule ruleFor(View v) {
             String key = keyOf(v);
-            Rule rule = rules.get(key);
+            Rule rule = ruleOf(v);
             if (rule == null) {
                 rule = new Rule(key, lead(v));
                 rule.label = title(v);
@@ -1027,7 +1103,7 @@ public final class ViewEditor {
                     body.addView(label(Local.of("ЦВЕТ")));
                     body.addView(paints);
                 }
-                Rule rule = rules.get(keyOf(v));
+                Rule rule = ruleOf(v);
                 if (rule != null && !rule.empty()) {
                     body.addView(spacer(8));
                     TextView reset = button(Local.of("Вернуть элемент как был"), false, this::resetSelected);
@@ -1054,8 +1130,8 @@ public final class ViewEditor {
             body.addView(label(Local.of("ВСЁ ПРИЛОЖЕНИЕ")));
             LinearLayout foot = row();
             int hidden = 0;
-            for (Rule rule : rules.values()) if (rule.hidden) hidden++;
-            foot.addView(button(Local.of("Скрытые") + (hidden > 0 ? " (" + hidden + ")" : ""), false, this::hiddenList));
+            for (Rule rule : rules.values()) if (!rule.empty()) hidden++;
+            foot.addView(button(Local.of("Изменённые") + (hidden > 0 ? " (" + hidden + ")" : ""), false, this::hiddenList));
             foot.addView(button(Local.of("Сбросить всё"), false, this::askResetAll));
             body.addView(foot);
             body.addView(spacer(10));
@@ -1127,7 +1203,7 @@ public final class ViewEditor {
             tile.setBackground(back);
             LinearLayout words = new LinearLayout(activity);
             words.setOrientation(LinearLayout.VERTICAL);
-            Rule rule = rules.get(keyOf(v));
+            Rule rule = ruleOf(v);
             boolean changed = rule != null && !rule.empty();
             words.addView(text(title(v) + (changed ? "  ●" : ""), 15, INK, true));
             String name = v.getClass().getName();
@@ -1139,10 +1215,10 @@ public final class ViewEditor {
                 walk.setOrientation(LinearLayout.VERTICAL);
                 walk.setGravity(Gravity.CENTER_HORIZONTAL);
                 LinearLayout arrows = new LinearLayout(activity);
-                arrows.addView(button("◀", false, () -> step(-1)));
-                arrows.addView(button("▶", false, () -> step(1)));
+                arrows.addView(round(pathOf(DOWN), false, () -> step(-1)));
+                arrows.addView(round(pathOf(UP), false, () -> step(1)));
                 walk.addView(arrows);
-                walk.addView(text(Local.of("под пальцем") + " " + (cursor + 1) + "/" + hits.size(), 10, MUTED, false));
+                walk.addView(text(Local.of("вложенный / родитель") + " " + (cursor + 1) + "/" + hits.size(), 10, MUTED, false));
                 tile.addView(walk);
             }
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1157,7 +1233,7 @@ public final class ViewEditor {
             box.setOrientation(LinearLayout.HORIZONTAL);
             box.setGravity(Gravity.CENTER_VERTICAL);
             Rect at = boxOf(v);
-            Rule rule = rules.get(keyOf(v));
+            Rule rule = ruleOf(v);
             float dx = rule == null ? 0f : rule.dx, dy = rule == null ? 0f : rule.dy;
 
             LinearLayout words = new LinearLayout(activity);
@@ -1341,7 +1417,7 @@ public final class ViewEditor {
         /** Smaller, the size it is, larger. */
         private View sizeControl() {
             View v = selected();
-            Rule rule = v == null ? null : rules.get(keyOf(v));
+            Rule rule = v == null ? null : ruleOf(v);
             float now = rule == null ? 1f : rule.scale;
             LinearLayout box = new LinearLayout(activity);
             box.setGravity(Gravity.CENTER_VERTICAL);
@@ -1387,7 +1463,8 @@ public final class ViewEditor {
             View v = selected();
             if (v == null) return;
             remember();
-            Rule rule = rules.remove(keyOf(v));
+            Rule rule = ruleOf(v);
+            if (rule != null) rules.remove(rule.key);
             if (rule != null) {
                 reindex();
                 refresh(rule);
@@ -1401,23 +1478,28 @@ public final class ViewEditor {
         }
 
         private void hiddenList() {
-            final List<Rule> gone = new ArrayList<Rule>();
-            for (Rule rule : rules.values()) if (rule.hidden) gone.add(rule);
-            if (gone.isEmpty()) {
-                Toast.makeText(activity, Local.of("Скрытых элементов нет"), Toast.LENGTH_SHORT).show();
+            final List<Rule> changed = new ArrayList<Rule>();
+            for (Rule rule : rules.values()) if (!rule.empty()) changed.add(rule);
+            if (changed.isEmpty()) {
+                Toast.makeText(activity, Local.of("Изменённых элементов нет"), Toast.LENGTH_SHORT).show();
                 return;
             }
-            String[] names = new String[gone.size()];
-            for (int i = 0; i < names.length; i++) names[i] = gone.get(i).label + "  ·  " + gone.get(i).key;
-            new AlertDialog.Builder(activity).setTitle(Local.of("Вернуть на экран"))
+            String[] names = new String[changed.size()];
+            for (int i = 0; i < names.length; i++) {
+                Rule rule = changed.get(i);
+                StringBuilder what = new StringBuilder();
+                if (rule.hidden) what.append(Local.of("скрыт")).append(' ');
+                if (rule.dx != 0f || rule.dy != 0f) what.append(Local.of("сдвинут")).append(' ');
+                if (rule.scale != 1f) what.append(Local.of("размер")).append(' ');
+                if (rule.text != null || rule.fill != null || rule.icon != null) what.append(Local.of("цвет"));
+                names[i] = rule.label + "  ·  " + what.toString().trim();
+            }
+            new AlertDialog.Builder(activity).setTitle(Local.of("Вернуть как было"))
                     .setItems(names, (d, which) -> {
                         remember();
-                        Rule rule = gone.get(which);
-                        rule.hidden = false;
-                        if (rule.empty()) {
-                            rules.remove(rule.key);
-                            reindex();
-                        }
+                        Rule rule = changed.get(which);
+                        rules.remove(rule.key);
+                        reindex();
                         refresh(rule);
                         save();
                         rebuild();
@@ -1489,7 +1571,7 @@ public final class ViewEditor {
                         // what the view was painted before is given back at once
                         release(v);
                         View again = selected();
-                        Rule rule = again == null ? null : rules.get(keyOf(again));
+                        Rule rule = again == null ? null : ruleOf(again);
                         if (rule != null) enforce(again, rule);
                     })
                     .setNegativeButton(Local.of("Отмена"), null).show();
