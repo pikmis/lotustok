@@ -527,7 +527,7 @@ public class SettingsActivity extends Activity {
 
         column.addView(section(TYPING));
         LinearLayout typing = card();
-        typing.addView(quiet(Local.of("Буквы появляются плавно, пока вы печатаете, в комментариях и сообщениях.")));
+        typing.addView(quiet(Local.of("Буквы выезжают и пружинят, удалённые улетают, курсор плывёт. В комментариях и сообщениях.")));
         typing.addView(liveToggleRow("edit", Local.of("Анимация набора текста"), TypingAnim.on(TypingAnim.ON),
                 on -> {
                     TypingAnim.set(TypingAnim.ON, on);
@@ -541,8 +541,25 @@ public class SettingsActivity extends Activity {
             typing.addView(liveToggleRow("expand_more", Local.of("Подъём снизу"), TypingAnim.on(TypingAnim.SLIDE),
                     on -> TypingAnim.set(TypingAnim.SLIDE, on)));
             typing.addView(line());
+            typing.addView(liveToggleRow("add", Local.of("Увеличение (пружина)"), TypingAnim.on(TypingAnim.SCALE),
+                    on -> TypingAnim.set(TypingAnim.SCALE, on)));
+            typing.addView(line());
+            typing.addView(liveToggleRow("animation", Local.of("Лёгкий поворот"), TypingAnim.on(TypingAnim.ROTATE),
+                    on -> TypingAnim.set(TypingAnim.ROTATE, on)));
+            typing.addView(line());
+            typing.addView(liveToggleRow("restore", Local.of("Анимация удаления"), TypingAnim.on(TypingAnim.GHOST),
+                    on -> TypingAnim.set(TypingAnim.GHOST, on)));
+            typing.addView(line());
+            typing.addView(liveToggleRow("edit", Local.of("Плавный курсор"), TypingAnim.on(TypingAnim.CURSOR),
+                    on -> TypingAnim.set(TypingAnim.CURSOR, on)));
+            typing.addView(line());
             typing.addView(actionRow("speed", Local.of("Скорость"), TypingAnim.speedName(), () -> {
                 TypingAnim.nextSpeed();
+                rebuild();
+            }));
+            typing.addView(line());
+            typing.addView(actionRow("tune", Local.of("Кривая"), TypingAnim.curveName(), () -> {
+                TypingAnim.nextCurve();
                 rebuild();
             }));
         }
