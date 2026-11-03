@@ -128,6 +128,20 @@
       "button": "Got it",
       "button_ru": "Понятно",
       "button_uk": "Зрозуміло"
+    },
+    {
+      "id": "supporter_lotustok",
+      "users": [
+        "7586430118165611540"
+      ],
+      "image": "supporter_lotustok.png",
+      "title": "LotusTok",
+      "text": "Supported LotusTok",
+      "text_ru": "Поддержал LotusTok",
+      "text_uk": "Підтримав LotusTok",
+      "button": "Got it",
+      "button_ru": "Понятно",
+      "button_uk": "Зрозуміло"
     }
   ]
 }
