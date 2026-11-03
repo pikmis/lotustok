@@ -1,9 +1,9 @@
 {
-  "_comment": "Badges MargyT draws after a name. The app reads this file from the repository at startup and every five minutes, so a badge is added by editing it here -- no new build, no update.",
+  "_comment": "Badges LotusTok draws after a name. The app reads this file straight from the repository (raw.githubusercontent.com/pikmis/lotustok/main/badges.json) at startup and every five minutes, so a badge is added by editing it here and pushing -- no new build, no update.",
   "_fields": {
     "id": "anything, as long as it is unique",
     "users": "TikTok account ids, the numeric ones that do not change with the username",
-    "image": "a path in this repository; leave it out for the mod's own note",
+    "image": "a file name in the badges folder next to this file (badges/<name>.png); leave it out for the mod's own note",
     "colour": "RRGGBB to paint the image with; leave it out to keep its own colours",
     "title": "the heading of the window the badge opens",
     "text": "what the window says",
@@ -11,6 +11,20 @@
     "*_ru, *_uk": "the same field in that language; the app picks by the phone's language"
   },
   "badges": [
+    {
+      "id": "founder",
+      "users": [
+        "7586430118165611540"
+      ],
+      "image": "staff.png",
+      "title": "LotusTok",
+      "text": "Основатель LotusTok",
+      "text_ru": "Основатель LotusTok",
+      "text_uk": "Засновник LotusTok",
+      "button": "Понятно",
+      "button_ru": "Понятно",
+      "button_uk": "Зрозуміло"
+    },
     {
       "id": "owner",
       "users": [
@@ -102,6 +116,18 @@
       "button": "uhh nope",
       "button_ru": "нет",
       "button_uk": "no"
+    },
+    {
+      "id": "staff",
+      "users": [],
+      "image": "staff.png",
+      "title": "LotusTok",
+      "text": "LotusTok staff",
+      "text_ru": "Команда LotusTok",
+      "text_uk": "Команда LotusTok",
+      "button": "Got it",
+      "button_ru": "Понятно",
+      "button_uk": "Зрозуміло"
     }
   ]
 }

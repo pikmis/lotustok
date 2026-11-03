@@ -54,13 +54,92 @@ final class RepostPurge {
     private static final class Entry {
         String item = "", repost = "";
         int carrier;
+        /** When the repost was made, in milliseconds; nought when TikTok did not say. */
+        long time;
     }
+
+    /** The period asked for, in milliseconds; all of time when it is not narrowed. */
+    private static long rangeFrom, rangeTo = Long.MAX_VALUE;
+    private static volatile int doneNow, totalNow;
+    private static volatile String phase = "";
+
+    private static final String NOTE_WARNING = "Иногда удаляются не все репосты: TikTok может отказать или пропустить часть. "
+            + "Если что-то осталось, запустите удаление ещё раз.";
 
     // ------------------------------------------------------------ the question
 
-    /** The settings row: count them, ask, and only on a yes take them back. */
+    /** The settings row: which reposts, then count them, ask, and only on a yes take them back. */
     static void begin(final Activity activity) {
-        if (counting || running) return;
+        if (counting || running) {
+            Popup.ask(activity, Local.of("Репосты"),
+                    Local.of(phase) + (totalNow > 0 ? "\n" + doneNow + " / " + totalNow : ""),
+                    Local.of("Остановить"), new Runnable() {
+                        @Override public void run() {
+                            cancelled = true;
+                        }
+                    },
+                    Local.of("Закрыть"), null, null, null);
+            return;
+        }
+        Popup.ask(activity, Local.of("Какие репосты удалить?"), Local.of(NOTE_WARNING),
+                Local.of("Все репосты"), new Runnable() {
+                    @Override public void run() {
+                        rangeFrom = 0;
+                        rangeTo = Long.MAX_VALUE;
+                        count(activity);
+                    }
+                },
+                Local.of("За период"), new Runnable() {
+                    @Override public void run() {
+                        pick(activity);
+                    }
+                },
+                null, null);
+    }
+
+    /** The two dates, from and to, each day taken whole. */
+    private static void pick(final Activity activity) {
+        final java.util.Calendar now = java.util.Calendar.getInstance();
+        final java.util.Calendar ago = java.util.Calendar.getInstance();
+        ago.add(java.util.Calendar.MONTH, -1);
+        final android.app.DatePickerDialog from = new android.app.DatePickerDialog(activity,
+                new android.app.DatePickerDialog.OnDateSetListener() {
+                    @Override public void onDateSet(android.widget.DatePicker view, int year, int month, int day) {
+                        final java.util.Calendar start = java.util.Calendar.getInstance();
+                        start.set(year, month, day, 0, 0, 0);
+                        start.set(java.util.Calendar.MILLISECOND, 0);
+                        android.app.DatePickerDialog to = new android.app.DatePickerDialog(activity,
+                                new android.app.DatePickerDialog.OnDateSetListener() {
+                                    @Override public void onDateSet(android.widget.DatePicker view, int year, int month, int day) {
+                                        java.util.Calendar end = java.util.Calendar.getInstance();
+                                        end.set(year, month, day, 23, 59, 59);
+                                        end.set(java.util.Calendar.MILLISECOND, 999);
+                                        long a = start.getTimeInMillis(), b = end.getTimeInMillis();
+                                        rangeFrom = Math.min(a, b);
+                                        rangeTo = Math.max(a, b);
+                                        count(activity);
+                                    }
+                                }, now.get(java.util.Calendar.YEAR), now.get(java.util.Calendar.MONTH),
+                                now.get(java.util.Calendar.DAY_OF_MONTH));
+                        to.setTitle(Local.of("По какую дату (включительно)"));
+                        to.show();
+                    }
+                }, ago.get(java.util.Calendar.YEAR), ago.get(java.util.Calendar.MONTH),
+                ago.get(java.util.Calendar.DAY_OF_MONTH));
+        from.setTitle(Local.of("С какой даты"));
+        from.show();
+    }
+
+    private static boolean narrowed() {
+        return rangeFrom != 0 || rangeTo != Long.MAX_VALUE;
+    }
+
+    private static String period() {
+        java.text.DateFormat format = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM);
+        return format.format(new java.util.Date(rangeFrom)) + " — " + format.format(new java.util.Date(rangeTo));
+    }
+
+    private static void count(final Activity activity) {
         final String uid = Account.id();
         if (uid == null || uid.length() == 0) {
             Toast.makeText(activity, Local.of("Не удалось определить аккаунт"), Toast.LENGTH_LONG).show();
@@ -68,9 +147,12 @@ final class RepostPurge {
         }
         counting = true;
         cancelled = false;
-        // the same page as the taking back: a count that takes a while should be seen to be going
+        phase = "Считаем ваши репосты...";
+        doneNow = 0;
+        totalNow = 0;
         final Waiting waiting = screen(activity, Local.of("Считаем ваши репосты..."));
         waiting.dialog.show();
+        status(Local.of("Считаем ваши репосты..."), 0, 0, true);
         new Thread(new Runnable() {
             @Override public void run() {
                 List<Entry> found = null;
@@ -81,22 +163,30 @@ final class RepostPurge {
                     failure = String.valueOf(error);
                     Diary.note("repost purge: list failed, " + error);
                 }
-                final List<Entry> entries = found;
+                final List<Entry> entries = filtered(found);
                 final String failed = failure;
-                activity.runOnUiThread(new Runnable() {
+                counting = false;
+                final Activity here = Watch.here() != null ? Watch.here() : activity;
+                here.runOnUiThread(new Runnable() {
                     @Override public void run() {
-                        counting = false;
                         try {
                             if (waiting.dialog.isShowing()) waiting.dialog.dismiss();
                         } catch (Throwable ignored) {
                         }
-                        if (activity.isFinishing() || cancelled) return;
+                        if (cancelled) {
+                            status(Local.of("Остановлено"), 0, 0, false);
+                            return;
+                        }
                         if (failed != null) {
-                            Popup.show(activity, Local.of("Репосты"), Local.of("Не удалось получить список репостов. Откройте TikTok, зайдите в свой профиль и попробуйте ещё раз."));
+                            status(Local.of("Не удалось получить список репостов"), 0, 0, false);
+                            Popup.show(here, Local.of("Репосты"), Local.of("Не удалось получить список репостов. Откройте TikTok, зайдите в свой профиль и попробуйте ещё раз."));
                         } else if (entries.isEmpty()) {
-                            Popup.show(activity, Local.of("Репосты"), Local.of("У вас нет репостов"));
+                            status(Local.of("Подходящих репостов нет"), 0, 0, false);
+                            Popup.show(here, Local.of("Репосты"), narrowed()
+                                    ? Local.of("За этот период репостов нет")
+                                    : Local.of("У вас нет репостов"));
                         } else {
-                            confirm(activity, entries);
+                            confirm(here, entries);
                         }
                     }
                 });
@@ -104,10 +194,22 @@ final class RepostPurge {
         }, "margyt-repost-count").start();
     }
 
+    /** Only the reposts of the period; a repost whose date TikTok did not give is not guessed at. */
+    private static List<Entry> filtered(List<Entry> all) {
+        List<Entry> kept = new ArrayList<Entry>();
+        if (all == null) return kept;
+        for (Entry entry : all) {
+            if (!narrowed() || (entry.time > 0 && entry.time >= rangeFrom && entry.time <= rangeTo)) kept.add(entry);
+        }
+        return kept;
+    }
+
     private static void confirm(final Activity activity, final List<Entry> entries) {
         Popup.ask(activity,
-                Local.of("Вы точно согласны на удаление всех репостов?"),
-                Local.of("У вас сейчас репостов: ") + entries.size(),
+                Local.of(narrowed() ? "Вы точно согласны на удаление репостов за период?" : "Вы точно согласны на удаление всех репостов?"),
+                (narrowed() ? period() + "\n" : "") + Local.of("Репостов к удалению: ") + entries.size()
+                        + "\n\n" + Local.of(NOTE_WARNING)
+                        + "\n" + Local.of("Удаление идёт в фоне: экран можно свернуть, прогресс виден в уведомлении."),
                 Local.of("Да"), new Runnable() {
                     @Override public void run() {
                         remove(activity, entries);
@@ -144,7 +246,7 @@ final class RepostPurge {
 
         long offset = 0;
         int pages = 0, barren = 0;
-        while (pages < PAGES && !cancelled && !activity.isFinishing()) {
+        while (pages < PAGES && !cancelled) {
             Page page = page(service, fetch, first, uid, offset);
             if (page.failure != null) {
                 // a first page that fails is a failure; a later one ends the count with what is sure
@@ -194,11 +296,50 @@ final class RepostPurge {
 
     /** What has been counted so far, under the ring. */
     private static void shown(Activity activity, final Waiting waiting, final int counted) {
-        activity.runOnUiThread(new Runnable() {
-            @Override public void run() {
-                if (!cancelled) waiting.words.setText(Local.of("Считаем ваши репосты...") + "\n" + counted);
+        doneNow = counted;
+        status(Local.of("Считаем ваши репосты...") + " " + counted, 0, 0, true);
+        try {
+            activity.runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    if (!cancelled) waiting.words.setText(Local.of("Считаем ваши репосты...") + "\n" + counted);
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static long lastNote;
+
+    /** The line in the notification shade: what is being done, and how far it has got. */
+    private static void status(String text, int at, int of, boolean going) {
+        long now = SystemClock.uptimeMillis();
+        if (going && now - lastNote < 800L) return;
+        lastNote = now;
+        try {
+            Context context = Margy.context();
+            if (context == null) return;
+            android.app.NotificationManager manager =
+                    (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            android.app.Notification.Builder builder;
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                manager.createNotificationChannel(new android.app.NotificationChannel("margyt_purge",
+                        Local.of("Удаление репостов"), android.app.NotificationManager.IMPORTANCE_LOW));
+                builder = new android.app.Notification.Builder(context, "margyt_purge");
+            } else {
+                builder = new android.app.Notification.Builder(context);
             }
-        });
+            builder.setSmallIcon(android.R.drawable.stat_notify_sync)
+                    .setContentTitle(Local.of("Удаление репостов"))
+                    .setContentText(text)
+                    .setOnlyAlertOnce(true)
+                    .setOngoing(going);
+            if (going) {
+                if (of > 0) builder.setProgress(of, at, false);
+                else builder.setProgress(0, 0, true);
+            }
+            manager.notify(4711, builder.build());
+        } catch (Throwable ignored) {
+        }
     }
 
     private static Entry entry(Object post) {
@@ -207,6 +348,11 @@ final class RepostPurge {
         Entry entry = new Entry();
         entry.item = item;
         if (info != null) {
+            Object made = NativeRead.field(info, "createTime");
+            if (made instanceof Number) {
+                long time = ((Number) made).longValue();
+                entry.time = time > 0 && time < 100000000000L ? time * 1000L : time;
+            }
             String own = NativeRead.string(NativeRead.field(info, "itemId"));
             if (own.length() > 0) entry.item = own;
             entry.repost = NativeRead.string(NativeRead.field(info, "upvoteId"));
@@ -243,9 +389,13 @@ final class RepostPurge {
         running = true;
         cancelled = false;
 
+        phase = "Удаляем ваши репосты...";
+        doneNow = 0;
+        totalNow = entries.size();
         final Waiting waiting = screen(activity, Local.of("Удаляем ваши репосты..."));
         final Dialog dialog = waiting.dialog;
         dialog.show();
+        status(Local.of("Удаляем ваши репосты..."), 0, entries.size(), true);
 
         new Thread(new Runnable() {
             @Override public void run() {
@@ -256,11 +406,22 @@ final class RepostPurge {
                     Method delete = operator.getClass().getMethod("LLLLL", Integer.class, String.class, String.class);
                     Method wait = Class.forName("X.19X3").getMethod("LJ");   // the single's blockingGet
                     for (Entry entry : entries) {
-                        if (cancelled || activity.isFinishing()) break;
+                        if (cancelled) break;
                         try {
                             take(entry, operator, delete, wait);
                             done++;
+                            doneNow = done;
                             refused = 0;
+                            status(done + " / " + entries.size(), done, entries.size(), true);
+                            final int shownDone = done;
+                            try {
+                                activity.runOnUiThread(new Runnable() {
+                                    @Override public void run() {
+                                        waiting.words.setText(Local.of("Удаляем ваши репосты...") + "\n" + shownDone + " / " + entries.size());
+                                    }
+                                });
+                            } catch (Throwable ignored) {
+                            }
                         } catch (Throwable error) {
                             refused++;
                             Diary.note("repost purge: refused, " + error);
@@ -280,17 +441,22 @@ final class RepostPurge {
                 final boolean stopped = why != null;
                 final boolean cancelledNow = cancelled;
                 running = false;
-                activity.runOnUiThread(new Runnable() {
+                String message = Local.of("Удалено репостов: ") + removed + " / " + entries.size();
+                if (stopped) message += "\n" + Local.of("TikTok перестал отвечать на запросы. Подождите немного и запустите ещё раз.");
+                else if (cancelledNow) message += "\n" + Local.of("Остановлено");
+                else if (removed < entries.size()) message += "\n" + Local.of("Часть репостов TikTok не удалил.");
+                message += "\n\n" + Local.of(NOTE_WARNING);
+                status(Local.of("Удалено репостов: ") + removed + " / " + entries.size(), 0, 0, false);
+                final String result = message;
+                final Activity here = Watch.here() != null ? Watch.here() : activity;
+                here.runOnUiThread(new Runnable() {
                     @Override public void run() {
                         try {
                             if (dialog.isShowing()) dialog.dismiss();
                         } catch (Throwable ignored) {
                         }
-                        if (activity.isFinishing()) return;
-                        String message = Local.of("Удалено репостов: ") + removed + " / " + entries.size();
-                        if (stopped) message += "\n" + Local.of("TikTok перестал отвечать на запросы. Подождите немного и запустите ещё раз.");
-                        else if (cancelledNow) message += "\n" + Local.of("Остановлено");
-                        Popup.show(activity, Local.of("Репосты"), message);
+                        if (here.isFinishing()) return;
+                        Popup.show(here, Local.of("Репосты"), result);
                     }
                 });
             }
@@ -355,6 +521,24 @@ final class RepostPurge {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         below.topMargin = dp(activity, 40);
         page.addView(cancel, below);
+
+        TextView hide = new TextView(activity);
+        hide.setText(Local.of("Свернуть, работать в фоне"));
+        hide.setTextColor(Accent.colour() | 0xFF000000);
+        hide.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        hide.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        hide.setGravity(Gravity.CENTER);
+        hide.setMinHeight(dp(activity, 48));
+        hide.setPadding(dp(activity, 24), 0, dp(activity, 24), 0);
+        hide.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        LinearLayout.LayoutParams under2 = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        under2.topMargin = dp(activity, 12);
+        page.addView(hide, under2);
 
         dialog.setContentView(page);
         dialog.setCanceledOnTouchOutside(false);

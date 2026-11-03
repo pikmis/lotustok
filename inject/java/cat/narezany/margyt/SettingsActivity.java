@@ -383,7 +383,7 @@ public class SettingsActivity extends Activity {
         mine.addView(line());
         mine.addView(toggleRow("tune", Text.MD3_PROFILE, Md3.isOn(Md3.KEY_PROFILE), on -> Md3.set(Md3.KEY_PROFILE, on)));
         mine.addView(line());
-        mine.addView(actionRow("repeat", Local.of("Удалить все мои репосты"), Local.of("Отменит каждый ваш репост, по одному"), () -> RepostPurge.begin(this)));
+        mine.addView(actionRow("repeat", Local.of("Удалить мои репосты"), Local.of("Все или за период, в фоне. Иногда удаляются не все"), () -> RepostPurge.begin(this)));
         column.addView(wrap(mine));
 
         column.addView(section(Text.REGION));
