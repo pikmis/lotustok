@@ -59,7 +59,6 @@ public final class Watch implements Application.ActivityLifecycleCallbacks {
         MD3Progress.attach(activity);
         CommentVotes.attach(activity);
         Ghost.resumed(activity);
-        TypingAnim.attach(activity);
     }
 
     @Override

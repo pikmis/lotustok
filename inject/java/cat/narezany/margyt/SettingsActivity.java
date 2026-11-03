@@ -525,45 +525,6 @@ public class SettingsActivity extends Activity {
                 Ghost.on(Ghost.LONG_COMMENTS), on -> Ghost.set(Ghost.LONG_COMMENTS, on)));
         column.addView(wrap(comments));
 
-        column.addView(section(TYPING));
-        LinearLayout typing = card();
-        typing.addView(quiet(Local.of("Буквы выезжают и пружинят, удалённые улетают, курсор плывёт. В комментариях и сообщениях.")));
-        typing.addView(liveToggleRow("edit", Local.of("Анимация набора текста"), TypingAnim.on(TypingAnim.ON),
-                on -> {
-                    TypingAnim.set(TypingAnim.ON, on);
-                    rebuildAfterSwitchAnimation();
-                }));
-        if (TypingAnim.on(TypingAnim.ON)) {
-            typing.addView(line());
-            typing.addView(liveToggleRow("visibility_off", Local.of("Размытие при появлении"), TypingAnim.on(TypingAnim.BLUR),
-                    on -> TypingAnim.set(TypingAnim.BLUR, on)));
-            typing.addView(line());
-            typing.addView(liveToggleRow("expand_more", Local.of("Подъём снизу"), TypingAnim.on(TypingAnim.SLIDE),
-                    on -> TypingAnim.set(TypingAnim.SLIDE, on)));
-            typing.addView(line());
-            typing.addView(liveToggleRow("add", Local.of("Увеличение (пружина)"), TypingAnim.on(TypingAnim.SCALE),
-                    on -> TypingAnim.set(TypingAnim.SCALE, on)));
-            typing.addView(line());
-            typing.addView(liveToggleRow("animation", Local.of("Лёгкий поворот"), TypingAnim.on(TypingAnim.ROTATE),
-                    on -> TypingAnim.set(TypingAnim.ROTATE, on)));
-            typing.addView(line());
-            typing.addView(liveToggleRow("restore", Local.of("Анимация удаления"), TypingAnim.on(TypingAnim.GHOST),
-                    on -> TypingAnim.set(TypingAnim.GHOST, on)));
-            typing.addView(line());
-            typing.addView(liveToggleRow("edit", Local.of("Плавный курсор"), TypingAnim.on(TypingAnim.CURSOR),
-                    on -> TypingAnim.set(TypingAnim.CURSOR, on)));
-            typing.addView(line());
-            typing.addView(actionRow("speed", Local.of("Скорость"), TypingAnim.speedName(), () -> {
-                TypingAnim.nextSpeed();
-                rebuild();
-            }));
-            typing.addView(line());
-            typing.addView(actionRow("tune", Local.of("Кривая"), TypingAnim.curveName(), () -> {
-                TypingAnim.nextCurve();
-                rebuild();
-            }));
-        }
-        column.addView(wrap(typing));
 
         column.addView(section(Text.TIKTOK_FEATURES));
         LinearLayout features = card();
@@ -3869,7 +3830,6 @@ public class SettingsActivity extends Activity {
                 || section.equals(Text.RAIL) || section.equals(Text.COMMENTS)
                 || section.equals(Text.TAGS) || section.equals(Text.FPS)
                 || section.equals(Text.TIKTOK_FEATURES)
-                || section.equals(TYPING)
                 || section.equals(BURN)) return 3;
         if (section.equals(MESSAGES) || section.equals(INBOX_CLEAN) || section.equals(GHOST) || section.equals(Text.PINNED_FRIENDS) || section.equals(Text.STREAKS)
                 || section.equals(Text.NOTIFICATIONS)) return 7;
@@ -3909,7 +3869,6 @@ public class SettingsActivity extends Activity {
     private static final String MY_PROFILE = Local.of("Мой профиль");
     private static final String MESSAGES = Local.of("Личные сообщения");
     private static final String GHOST = Local.of("Призрак");
-    private static final String TYPING = Local.of("Анимация набора");
     private static final String INBOX_CLEAN = Local.of("Входящие: что скрыть");
 
     private boolean navigating;
