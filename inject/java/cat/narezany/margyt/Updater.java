@@ -17,7 +17,7 @@ import java.util.Locale;
  * Telling you there is a newer MargyT, and putting it on if you say so.
  *
  * `version.json` in the repository says what the latest is and where its apk
- * lives. It is read at startup and every five minutes, exactly as the badges
+ * lives (a release asset on GitHub, which the download follows by hand). It is read at startup and every five minutes, exactly as the badges
  * are, so an update announces itself without anybody being told to look.
  *
  * Refusing is remembered for as long as the app is running and no longer: the
@@ -34,8 +34,9 @@ public final class Updater {
 
     private Updater() {}
 
+    /** The repository's own file: what the latest LotusTok is and where its apk is. Read raw, so no server is needed. */
     private static final String SOURCE =
-            "https://tok.lotusgram.lol/updates/version.json";
+            "https://raw.githubusercontent.com/pikmis/lotustok/main/version.json";
 
     public static final String KEY_REMIND = "update_remind";
 
