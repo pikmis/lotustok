@@ -161,6 +161,18 @@ final class WavyBar extends View {
         return theirs[1] - mine[1] + bar.getHeight() / 2f;
     }
 
+    /**
+     * The wave lies over whatever it is put in, and takes no room of its own: a view's own measure
+     * gives it all the room there is when its parent is only as big as what is in it, and the parent,
+     * and TikTok's tag bar with it, would then grow to fill the screen.
+     */
+    @Override
+    protected void onMeasure(int widthSpec, int heightSpec) {
+        int width = View.MeasureSpec.getMode(widthSpec) == View.MeasureSpec.EXACTLY ? View.MeasureSpec.getSize(widthSpec) : 0;
+        int height = View.MeasureSpec.getMode(heightSpec) == View.MeasureSpec.EXACTLY ? View.MeasureSpec.getSize(heightSpec) : 0;
+        setMeasuredDimension(width, height);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         if (!MD3Progress.on() || !bar.isAttachedToWindow()) {
@@ -190,7 +202,7 @@ final class WavyBar extends View {
                 return;
             }
         }
-        if (bar.getAlpha() != 0f) bar.setAlpha(0f);
+        if (!MD3Progress.labelled(bar) && bar.getAlpha() != 0f) bar.setAlpha(0f);
         MD3Progress.hideSeekBars();
         if (!scrubOnly && MD3Progress.fingerDown && MD3Progress.scrubbing(getRootView())) {
             postInvalidateOnAnimation();

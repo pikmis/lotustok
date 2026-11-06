@@ -98,7 +98,19 @@ CRASH_EACH = 20
 #: TikTok, paste and come back; short enough that a code left in a bio is not
 #: a key lying around.
 PROOF_LIVES = 30 * 60
-PROOF_TRIES = 15
+PROOF_TRIES = 60
+
+#: what a code is made of: digits and letters that cannot be mistaken for each
+#: other (no 0/O, 1/I/L), in two groups of four -- XXXX-XXXX
+CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+#: how many accounts one Telegram user may bind to themselves, and how many
+#: codes they may try in an hour (a guess costs one of these)
+BOUND_MOST = 3
+REDEEM_TRIES = 12
+
+#: a phone saying it is here is heard at most this often per account
+SEEN_EVERY = 10 * 60
 
 #: a code with less than this left is not handed out again. Somebody who
 #: opens the card gets a code they have time to use rather than the tail end
@@ -220,6 +232,29 @@ def prepare():
         if column not in badge_columns:
             db.execute("ALTER TABLE badge ADD COLUMN %s TEXT NOT NULL DEFAULT ''"
                        % column)
+    # a code is now spent in the bot: who spent it, and which accounts a
+    # Telegram user has bound to themselves
+    proof_columns = [row[1] for row in db.execute("PRAGMA table_info(proofs)")]
+    for column, kind in (("redeemed", "INTEGER NOT NULL DEFAULT 0"),
+                         ("tg_id", "TEXT NOT NULL DEFAULT ''"),
+                         ("tg_name", "TEXT NOT NULL DEFAULT ''")):
+        if column not in proof_columns:
+            db.execute("ALTER TABLE proofs ADD COLUMN %s %s" % (column, kind))
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS telegram (
+            uid   TEXT PRIMARY KEY,
+            tg_id TEXT NOT NULL,
+            name  TEXT NOT NULL DEFAULT '',
+            bound INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS seen (
+            uid     TEXT PRIMARY KEY,
+            first   INTEGER NOT NULL,
+            last    INTEGER NOT NULL,
+            version TEXT NOT NULL DEFAULT '',
+            opens   INTEGER NOT NULL DEFAULT 1
+        );
+    """)
     # keys used to be handed to whoever asked first, so every key that exists
     # was made under a rule that no longer holds
     # codes are now one per asker rather than one per account: a code that
@@ -415,6 +450,75 @@ def a_read_to_spare():
 PROOFS_EACH = 5
 
 
+def new_code(db):
+    """A code like K7M2-9QXA that no other waiting proof has."""
+    while True:
+        letters = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
+        code = letters[:4] + "-" + letters[4:]
+        taken = db.execute("SELECT 1 FROM proofs WHERE code = ? OR was = ?",
+                           (code, code)).fetchone()
+        if not taken:
+            return code
+
+
+_redeems = {}
+_redeems_lock = threading.Lock()
+
+
+def redeem(text, tg_id, tg_name):
+    """The bot hands over a code somebody typed. Returns (status, uid).
+
+    status: ok, none (no such code, or it ran out), bound (the account already
+    belongs to another Telegram), many (this Telegram holds enough accounts),
+    slow (too many tries this hour).
+    """
+    typed = re.sub(r"[^A-Za-z0-9]", "", text or "").upper()
+    if len(typed) != 8:
+        return "none", ""
+    code = typed[:4] + "-" + typed[4:]
+    tg_id = str(tg_id)
+    now = int(time.time())
+
+    with _redeems_lock:
+        tries = [t for t in _redeems.get(tg_id, []) if now - t < 3600]
+        if len(tries) >= REDEEM_TRIES:
+            _redeems[tg_id] = tries
+            return "slow", ""
+        tries.append(now)
+        _redeems[tg_id] = tries
+
+    db = connect()
+    row = db.execute(
+        "SELECT uid, holder, made, code, was, was_made FROM proofs"
+        " WHERE code = ? OR was = ?", (code, code)).fetchone()
+    if not row:
+        db.close()
+        return "none", ""
+    uid, holder, made, current, was, was_made = row
+    stamp = made if code == current else was_made
+    spare = 0 if code == current else PROOF_SPARE
+    if now - stamp > PROOF_LIVES + spare:
+        db.close()
+        return "none", ""
+
+    held = db.execute("SELECT tg_id FROM telegram WHERE uid = ?", (uid,)).fetchone()
+    if held and held[0] != tg_id:
+        db.close()
+        return "bound", uid
+    if not held:
+        mine_count = db.execute("SELECT COUNT(*) FROM telegram WHERE tg_id = ?",
+                                (tg_id,)).fetchone()[0]
+        if mine_count >= BOUND_MOST:
+            db.close()
+            return "many", uid
+
+    db.execute("UPDATE proofs SET redeemed = 1, tg_id = ?, tg_name = ?"
+               " WHERE uid = ? AND holder = ?", (tg_id, tg_name or "", uid, holder))
+    db.commit()
+    db.close()
+    return "ok", uid
+
+
 def prove(body, ip):
     """A code for this account to put in its bio, and a secret for the asker.
 
@@ -446,13 +550,13 @@ def prove(body, ip):
     elif row and fresh:
         # the one already in a bio keeps working for a while, so asking for
         # another does not strand whoever had pasted the first
-        code, holder = "margyt-" + secrets.token_hex(3), row[0]
+        code, holder = new_code(db), row[0]
         db.execute("UPDATE proofs SET code = ?, made = ?, tried = 0, last = 0,"
-                   " was = ?, was_made = ?, ip = ?"
+                   " was = ?, was_made = ?, ip = ?, redeemed = 0, tg_id = '', tg_name = ''"
                    " WHERE uid = ? AND holder = ?",
                    (code, now, row[1], now, ip, uid, holder))
     else:
-        code, holder = "margyt-" + secrets.token_hex(3), secrets.token_hex(16)
+        code, holder = new_code(db), secrets.token_hex(16)
         spare = db.execute(
             "SELECT holder FROM proofs WHERE uid = ? ORDER BY made DESC"
             " LIMIT -1 OFFSET ?", (uid, PROOFS_EACH - 1)).fetchall()
@@ -506,12 +610,13 @@ def prove_check(body, ip):
         return 410, {"error": "ask for a code first"}
     holder, tried, last = row[0], row[4], row[5]
 
+    # a code is good for a while after it was made, and the one before it for a
+    # little longer, so asking for another never strands anybody
     codes = []
     made = db.execute("SELECT made FROM proofs WHERE uid = ? AND holder = ?",
                       (uid, holder)).fetchone()
     if made and now - made[0] <= PROOF_LIVES:
         codes.append(row[1])
-    # the one before it, for as long as somebody could still be looking at it
     if row[2] and now - row[3] <= PROOF_LIVES + PROOF_SPARE:
         codes.append(row[2])
     if not codes:
@@ -520,50 +625,88 @@ def prove_check(body, ip):
     if tried >= PROOF_TRIES:
         db.close()
         return 429, {"error": "too many tries, ask for a new code"}
-    if now - last < 5:
+    if now - last < 3:
         db.close()
-        return 429, {"error": "too often", "wait": 5 - (now - last)}
+        return 429, {"error": "too often", "wait": 3 - (now - last)}
     db.execute("UPDATE proofs SET tried = tried + 1, last = ?"
                " WHERE uid = ? AND holder = ?", (now, uid, holder))
-    db.commit()
-    db.close()
 
-    if not a_read_to_spare():
-        return 503, {"error": "too many at once, try again in a minute"}
+    # the code is spent in the bot, with `вериф XXXX-XXXX`; this asks only
+    # whether that has happened
+    state = db.execute("SELECT redeemed, tg_id, tg_name FROM proofs"
+                       " WHERE uid = ? AND holder = ?", (uid, holder)).fetchone()
+    if not state or not state[0]:
+        db.commit()
+        db.close()
+        return 400, {"error": "not entered yet"}
+    tg_id, tg_name = state[1], state[2]
 
-    # the id is what is being proved, so the page is reached from the id
-    # rather than from a name anybody typed. A name sent with the request is
-    # only a fallback for the day the share link stops answering
-    who = tiktok.behind(uid)
-    if not who and tiktok.named(name):
-        who = tiktok.profile(name)
-    if not who:
-        # some accounts have no page the share link can reach: it answers
-        # with a sec_uid, and TikTok's web has nothing behind one. Those
-        # people have to say what their name is, and the page it leads to is
-        # still checked against the id
-        if not tiktok.named(name):
-            return 502, {"error": "tell me the name"}
-        return 502, {"error": "tiktok did not answer"}
-    if who.get("uid") != uid:
-        return 403, {"error": "that name belongs to another account"}
-    said = " ".join([who.get("about") or "", who.get("nickname") or ""]).lower()
-    if not any(one in said for one in codes):
-        return 400, {"error": "the code is not in that profile yet"}
+    bound = db.execute("SELECT tg_id FROM telegram WHERE uid = ?", (uid,)).fetchone()
+    if bound and bound[0] != tg_id:
+        db.commit()
+        db.close()
+        return 403, {"error": "that account belongs to another telegram"}
+    if not bound:
+        db.execute("INSERT INTO telegram (uid, tg_id, name, bound) VALUES (?,?,?,?)",
+                   (uid, tg_id, tg_name, now))
 
     token = secrets.token_hex(16)
-    db = connect()
     db.execute("INSERT INTO owner (uid, token, claimed, proved, proved_at, name)"
                " VALUES (?,?,?,1,?,?) ON CONFLICT(uid) DO UPDATE SET"
                " token = excluded.token, proved = 1, proved_at = excluded.proved_at,"
                " name = excluded.name",
-               (uid, token, now, now, who.get("username") or name))
+               (uid, token, now, now, tg_name or name))
     # every outstanding code for this account goes: it is proved now
     db.execute("DELETE FROM proofs WHERE uid = ?", (uid,))
     db.commit()
     out = mine(uid)
     db.close()
     return 200, {"uid": uid, "token": token, "proved": True, "badges": out}
+
+
+# ------------------------------------------------------------ who is here
+
+def people(limit=30):
+    """Counts and the latest accounts that said they are here, for the panel."""
+    now = int(time.time())
+    db = connect()
+    total = db.execute("SELECT COUNT(*) FROM seen").fetchone()[0]
+    day = db.execute("SELECT COUNT(*) FROM seen WHERE last > ?", (now - 86400,)).fetchone()[0]
+    week = db.execute("SELECT COUNT(*) FROM seen WHERE last > ?", (now - 7 * 86400,)).fetchone()[0]
+    bound = db.execute("SELECT COUNT(*) FROM telegram").fetchone()[0]
+    rows = [{"uid": r[0], "first": r[1], "last": r[2], "version": r[3], "opens": r[4],
+             "telegram": r[5]}
+            for r in db.execute(
+                "SELECT s.uid, s.first, s.last, s.version, s.opens, t.name FROM seen s"
+                " LEFT JOIN telegram t ON t.uid = s.uid ORDER BY s.last DESC LIMIT ?",
+                (limit,))]
+    db.close()
+    return {"total": total, "day": day, "week": week, "bound": bound, "rows": rows}
+
+
+def seen(body, ip):
+    """A phone says its account is here: when, and with which version.
+
+    Nothing is trusted from it beyond that: the answer changes nothing the
+    phone could use, and an account heard from again within SEEN_EVERY is
+    simply counted once.
+    """
+    uid = body.get("uid", "")
+    if not sane(uid):
+        return 400, {"error": "that is not an account id"}
+    version = str(body.get("version", ""))[:16]
+    now = int(time.time())
+    db = connect()
+    row = db.execute("SELECT last FROM seen WHERE uid = ?", (uid,)).fetchone()
+    if row is None:
+        db.execute("INSERT INTO seen (uid, first, last, version, opens)"
+                   " VALUES (?,?,?,?,1)", (uid, now, now, version))
+    elif now - row[0] >= SEEN_EVERY:
+        db.execute("UPDATE seen SET last = ?, version = ?, opens = opens + 1"
+                   " WHERE uid = ?", (now, version, uid))
+    db.commit()
+    db.close()
+    return 200, {"ok": True}
 
 
 def too_soon(db, uid, ip):
@@ -1169,7 +1312,7 @@ class Handler(BaseHTTPRequestHandler):
                            " ORDER BY changed DESC")]
             db.close()
             self.html(panel.main_page(badges, plugins()["plugins"], colours,
-                                      query.get("said", [""])[0], crashes()))
+                                      query.get("said", [""])[0], crashes(), people()))
             return
 
         if path == "/admin/badge":
@@ -1487,6 +1630,8 @@ class Handler(BaseHTTPRequestHandler):
             code, out = prove(body, ip)
         elif path == "/prove/check":
             code, out = prove_check(body, ip)
+        elif path == "/seen":
+            code, out = seen(body, ip)
         elif path == "/profile":
             code, out = profile(body, ip)
         elif path == "/old":

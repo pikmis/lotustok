@@ -406,57 +406,50 @@ final class Text {
             "Подтвердить аккаунт", "Підтвердити акаунт", "Prove the account is yours");
 
     static final String PROVE_NOTE = pick(
-            "Без этого сервер не даст менять значки и градиент.",
-            "Без цього сервер не дасть змінювати значки й градієнт.",
-            "Without it the server will not let anything be changed.");
+            "Без этого сервер не даст менять значки и градиент. Подтверждение через бота @lotustokapp.",
+            "Без цього сервер не дасть змінювати значки й градієнт. Підтвердження через бота @lotustokapp.",
+            "Without it the server will not let anything be changed. Done through the bot @lotustokapp.");
 
     static final String PROVE_DONE = pick(
             "Аккаунт подтверждён", "Акаунт підтверджено", "Account proved");
 
     static final String PROVE_DONE_NOTE = pick(
-            "Код можно убрать из описания профиля.",
-            "Код можна прибрати з опису профілю.",
-            "The code can come out of the bio now.");
+            "Аккаунт привязан к твоему Telegram.",
+            "Акаунт прив'язано до твого Telegram.",
+            "The account is tied to your Telegram.");
 
     static final String PROVE_HOW = pick(
-            "1. Скопируй код.\n"
-                    + "2. Вставь его в описание профиля в TikTok и сохрани.\n"
-                    + "3. Вернись сюда и нажми «Проверить».\n"
-                    + "Потом код можно убрать из описания.",
-            "1. Скопіюй код.\n"
-                    + "2. Встав його в опис профілю в TikTok і збережи.\n"
-                    + "3. Повернись сюди і натисни «Перевірити».\n"
-                    + "Потім код можна прибрати з опису.",
-            "1. Copy the code.\n"
-                    + "2. Put it in your TikTok bio and save.\n"
-                    + "3. Come back here and press Check.\n"
-                    + "The code can come out afterwards.");
+            "1. Нажми на код: скопируется команда.\n2. Открой бота @lotustokapp в Telegram и отправь ему её в личку.\n3. Вернись сюда и нажми «Проверить».",
+            "1. Натисни на код: скопіюється команда.\n2. Відкрий бота @lotustokapp у Telegram і надішли йому її в особисті.\n3. Повернись сюди і натисни «Перевірити».",
+            "1. Tap the code: the command is copied.\n2. Open the bot @lotustokapp in Telegram and send it there in a private chat.\n3. Come back here and press Check.");
 
     static final String PROVE_WHY = pick(
-            "Так сервер убеждается, что аккаунт твой: в чужое описание никто "
-                    + "написать не может.",
-            "Так сервер переконується, що акаунт твій: у чужий опис ніхто "
-                    + "написати не може.",
-            "It is the one thing only the owner of an account can do.");
+            "Код одноразовый и живёт полчаса. Аккаунт привязывается к тому Telegram, из которого код ввели.",
+            "Код одноразовий і живе пів години. Акаунт прив'язується до того Telegram, з якого код ввели.",
+            "The code is single-use and lasts half an hour. The account is tied to the Telegram it was entered from.");
 
-    static final String PROVE_COPY = pick("Код скопирован", "Код скопійовано",
-            "Code copied");
+    static final String PROVE_COPY = pick(
+            "Команда скопирована",
+            "Команду скопійовано",
+            "Command copied");
 
     static final String PROVE_TAP = pick(
-            "Нажми на код, чтобы скопировать",
-            "Натисни на код, щоб скопіювати",
-            "Tap the code to copy it");
+            "Нажми на код, чтобы скопировать команду",
+            "Натисни на код, щоб скопіювати команду",
+            "Tap the code to copy the command");
 
     static final String PROVE_FRESH = pick(
             "Другой код", "Інший код", "A different code");
 
     static final String PROVE_FRESH_DONE = pick(
-            "Код заменён, вставь новый в описание",
-            "Код замінено, встав новий в опис",
-            "Here is another one, put it in the bio");
+            "Код заменён, отправь боту новый",
+            "Код замінено, надішли боту новий",
+            "Here is another one, send the bot this one");
 
     static final String PROVE_CHECKING = pick(
-            "Смотрю твою страницу…", "Дивлюсь твою сторінку…", "Reading your page...");
+            "Проверяю…",
+            "Перевіряю…",
+            "Checking...");
 
     static final String PROVE_NEED_NAME = pick(
             "Не могу найти твою страницу по айди. Впиши свой ник и жми ещё раз.",
@@ -485,17 +478,14 @@ final class Text {
             "Готово, аккаунт твой", "Готово, акаунт твій", "Done, it is yours");
 
     static final String PROVE_NOT_THERE = pick(
-            "Кода в описании не видно. Сохрани описание и жми ещё раз, "
-                    + "TikTok обновляет страницу не сразу.",
-            "Коду в описі не видно. Збережи опис і тисни ще раз, "
-                    + "TikTok оновлює сторінку не одразу.",
-            "The code is not on the page yet. Save the bio and press again, "
-                    + "TikTok takes a moment to show it.");
+            "Бот ещё не получил код. Отправь ему «вериф <код>» в личку и жми ещё раз.",
+            "Бот ще не отримав код. Надішли йому «вериф <код>» в особисті і тисни ще раз.",
+            "The bot has not got the code yet. Send it \"вериф <code>\" in a private chat and press again.");
 
     static final String PROVE_OTHER_NAME = pick(
-            "Этот ник принадлежит другому аккаунту",
-            "Цей нік належить іншому акаунту",
-            "That name belongs to another account");
+            "Этот аккаунт уже подтверждён с другого Telegram",
+            "Цей акаунт уже підтверджено з іншого Telegram",
+            "That account is already tied to another Telegram");
 
     static final String PROVE_NO_TIKTOK = pick(
             "TikTok не ответил, попробуй ещё раз",
@@ -1414,6 +1404,12 @@ final class Text {
     static final String SHEET_POST_TITLE = pick("Скачать публикацию", "Завантажити публікацію", "Download post");
     static String allPhotos(int count) {
         return pick("Скачать все фото (" + count + ")", "Завантажити всі фото (" + count + ")", "Download all photos (" + count + ")");
+    }
+    static String pickedPhotos(int count) {
+        return pick("Скачать выбранные (" + count + ")", "Завантажити вибрані (" + count + ")", "Download selected (" + count + ")");
+    }
+    static String photosCount(int count) {
+        return pick("Фото: " + count, "Фото: " + count, "Photos: " + count);
     }
     static String photosSaved(int saved, int total) {
         return pick("Сохранено " + saved + " из " + total + " фото", "Збережено " + saved + " із " + total + " фото", "Saved " + saved + " of " + total + " photos");

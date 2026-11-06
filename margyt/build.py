@@ -706,10 +706,11 @@ class Build:
         own = manifest_module.icon_ids(manifest)
         if own:
             icon_res[0] = own[0]
-        apk.add(bloom.BACKGROUND_PATH, bloom.background())
         apk.add(bloom.FOREGROUND_PATH, bloom.foreground())
+        apk.add(bloom.MARK_PATH, bloom.mark())
         extended = resadd.add_files(extended, bloom.LAYERS, "drawable",
-                                    [("bloom_bg", bloom.BACKGROUND_PATH), ("bloom_fg", bloom.FOREGROUND_PATH)],
+                                    [("bloom_bg", bloom.ICON_PNG), ("bloom_fg", bloom.FOREGROUND_PATH),
+                                     ("bloom_mark", bloom.MARK_PATH)],
                                     "margyt.bloom")
         with open(os.path.join(self.root, bloom.PICTURE), "rb") as handle:
             apk.add(bloom.ICON_PNG, handle.read())

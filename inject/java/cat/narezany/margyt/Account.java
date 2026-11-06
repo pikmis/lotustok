@@ -92,7 +92,8 @@ public final class Account {
             activeId=numeric(uid) ? uid : null;
             remember(KEY_ID, uid);
             rememberProfile(user);
-            BioProof.recover();
+            // account verification is off: nothing here proves an account any more
+            // BioProof.recover();
             if (uid != null && (!uid.equals(currentUserUid)
                     || now - currentUserCapturedAt >= 120000L)) {
                 currentUserUid = uid;
@@ -172,8 +173,51 @@ public final class Account {
             return;
         }
         if (!signedIn.equals(uid)) return;
+        saveCounts(model);
         saveProfile(clean, handle, null);
     }
+
+    private static final String KEY_FOLLOWERS = "profile_followers", KEY_FOLLOWING = "profile_following",
+            KEY_LIKES = "profile_likes";
+
+    private static long numberOf(Object model, String method) {
+        try {
+            Object value = model.getClass().getMethod(method).invoke(model);
+            if (value instanceof Number) return ((Number) value).longValue();
+            if (value instanceof String) return Long.parseLong((String) value);
+        } catch (Throwable ignored) {
+        }
+        return -1;
+    }
+
+    /** The numbers under the name, kept for the previews in the settings. Only this account's own. */
+    private static void saveCounts(Object model) {
+        try {
+            SharedPreferences p = prefs();
+            if (p == null) return;
+            SharedPreferences.Editor edit = p.edit();
+            long followers = numberOf(model, "getFollowerCount"), following = numberOf(model, "getFollowingCount"),
+                    likes = numberOf(model, "getTotalFavorited");
+            if (followers >= 0) edit.putLong(KEY_FOLLOWERS, followers);
+            if (following >= 0) edit.putLong(KEY_FOLLOWING, following);
+            if (likes >= 0) edit.putLong(KEY_LIKES, likes);
+            edit.apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static long savedCount(String key) {
+        try {
+            SharedPreferences p = prefs();
+            return p == null ? -1 : p.getLong(key, -1);
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    public static long profileFollowers() { return savedCount(KEY_FOLLOWERS); }
+    public static long profileFollowing() { return savedCount(KEY_FOLLOWING); }
+    public static long profileLikes() { return savedCount(KEY_LIKES); }
 
     private static synchronized void publishPending() {
         if (pendingUid == null || !pendingUid.equals(id) || pendingName == null) return;

@@ -8,11 +8,11 @@ import org.json.JSONObject;
 /**
  * Proving that an account is yours, once.
  *
- * TikTok will not tell anybody that somebody is who they say they are, so the
- * mod asks the one thing TikTok does say out loud: what a profile page holds.
- * The server gives out a short code, the person puts it in their bio, the
- * server reads the page and sees it. Nobody can write into somebody else's
- * bio, so nobody else gets the key.
+ * The server gives out a short code, XXXX-XXXX, and the person sends it to the
+ * Telegram bot with `вериф XXXX-XXXX`. The bot hands the code to the server and
+ * the account is tied to that Telegram: from then on nobody else can prove it.
+ * Pressing Check here only asks whether the bot has heard the code yet; the
+ * secret that came with the code is what the key is given against.
  *
  * The key that comes back is kept on the phone and used for everything after
  * that: the order of badges, a gradient. Proving is not something
@@ -285,9 +285,8 @@ public final class Proof {
         if (needsName) return Text.PROVE_NEED_NAME;
         if ("that is not the code's owner".equals(what)) return Text.PROVE_NOT_YOURS;
         if (said.code == 0) return Text.PROVE_NO_SERVER;
-        if ("the code is not in that profile yet".equals(what)) return Text.PROVE_NOT_THERE;
-        if ("that name belongs to another account".equals(what)) return Text.PROVE_OTHER_NAME;
-        if ("tiktok did not answer".equals(what)) return Text.PROVE_NO_TIKTOK;
+        if ("not entered yet".equals(what)) return Text.PROVE_NOT_THERE;
+        if ("that account belongs to another telegram".equals(what)) return Text.PROVE_OTHER_NAME;
         if (said.code == 410) return Text.PROVE_STALE;
         if (said.code == 429) return Text.PROVE_TOO_OFTEN;
         return Text.PROVE_FAILED;

@@ -5,7 +5,9 @@ import java.net.URI;
 /** The store has its own endpoint, independent of profile/badge infrastructure. */
 final class PluginCatalog {
     private PluginCatalog() {}
-    private static final String DEFAULT=Badges.SERVER+"/plugins";
+    /** LotusTok's own server: the catalogue of plugins is read from here by default. */
+    static final String SERVER=Badges.SERVER;
+    private static final String DEFAULT=SERVER+"/plugins";
     static String endpoint(Context context){
         android.content.SharedPreferences prefs=context.getSharedPreferences("margyt_store",0);
         if(prefs.contains("catalog_enabled")&&!prefs.getBoolean("catalog_enabled",true))return "";
@@ -21,7 +23,7 @@ final class PluginCatalog {
         if(path==null||path.isEmpty())throw new Exception(Local.of("Нет ссылки на файл плагина"));
         // our own server answers under a prefix and names its files from the
         // prefix down, the way 1.x read them
-        if(path.startsWith("/")&&!path.startsWith("//")&&base.startsWith(Badges.SERVER+"/"))return https(Badges.SERVER+path);
+        if(path.startsWith("/")&&!path.startsWith("//")&&base.startsWith(SERVER+"/"))return https(SERVER+path);
         return https(new URI(https(base)).resolve(path).toString());
     }
     static String https(String address)throws Exception{

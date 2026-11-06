@@ -49,6 +49,13 @@ public final class Popup {
      */
     public static void show(Context context, String title, String message,
                             String button, final android.graphics.drawable.Drawable picture) {
+        show(context, title, message, button, picture, null, null);
+    }
+
+    /** The same, with a second button above the closing one, for a badge that has somewhere to lead. */
+    public static void show(Context context, String title, String message,
+                            String button, final android.graphics.drawable.Drawable picture,
+                            String more, final Runnable onMore) {
         try {
             Skin skin = Skin.remembered(context);
             Dialog dialog = new SheetDialog(context, true);
@@ -70,6 +77,35 @@ public final class Popup {
                 where.topMargin = dp(context, 16);
                 LinearLayout holder = (LinearLayout) card;
                 holder.addView(view, Math.max(0, holder.getChildCount() - 1), where);
+            }
+            if (more != null && onMore != null && card instanceof LinearLayout) {
+                final Dialog shown = dialog;
+                TextView extra = new TextView(context);
+                extra.setText(more);
+                extra.setTextColor(Accent.colour());
+                extra.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+                extra.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                extra.setGravity(Gravity.CENTER);
+                extra.setPadding(0, dp(context, 12), 0, dp(context, 12));
+                GradientDrawable tonal = new GradientDrawable();
+                tonal.setColor(skin.page);
+                tonal.setCornerRadius(dp(context, 24));
+                extra.setBackground(tonal);
+                extra.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        try {
+                            shown.dismiss();
+                        } catch (Throwable ignored) {
+                        }
+                        onMore.run();
+                    }
+                });
+                LinearLayout.LayoutParams extraSize = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                extraSize.topMargin = dp(context, 12);
+                LinearLayout holder = (LinearLayout) card;
+                holder.addView(extra, Math.max(0, holder.getChildCount() - 1), extraSize);
             }
 
             dialog.setContentView(card);
@@ -579,29 +615,12 @@ public final class Popup {
             shown.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    copy(v.getContext(), shown.getText().toString());
+                    copy(v.getContext(), "вериф " + shown.getText());
                     Screen.say(Text.PROVE_COPY);
                 }
             });
             card.addView(shown, wide(context, 0));
 
-            final android.widget.EditText named = new android.widget.EditText(context);
-            named.setHint(Text.PROVE_NAME);
-            named.setTextColor(skin.text);
-            named.setHintTextColor(skin.muted());
-            named.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-            named.setSingleLine(true);
-            named.setPadding(dp(context, 12), dp(context, 10), dp(context, 12),
-                    dp(context, 10));
-            GradientDrawable line = new GradientDrawable();
-            line.setColor(skin.page);
-            line.setCornerRadius(dp(context, 10));
-            line.setStroke(dp(context, 1), skin.muted());
-            named.setBackground(line);
-            // only for the accounts whose page the server cannot reach from
-            // the id: everybody else never sees a box to type in
-            named.setVisibility(View.GONE);
-            card.addView(named, wide(context, 10));
 
             final TextView again = new TextView(context);
             again.setText(Text.PROVE_FRESH);
@@ -638,7 +657,7 @@ public final class Popup {
                     go.setEnabled(false);
                     go.setAlpha(0.6f);
                     tap.setText(Text.PROVE_CHECKING);
-                    checking.check(named.getText().toString(), new Reply() {
+                    checking.check("", new Reply() {
                         @Override
                         public void said(boolean ok, String trouble, String fresh,
                                          boolean askName) {
@@ -647,7 +666,6 @@ public final class Popup {
                                 return;
                             }
                             if (fresh != null && fresh.length() > 0) shown.setText(fresh);
-                            if (askName) named.setVisibility(View.VISIBLE);
                             tap.setText(trouble);
                             go.setEnabled(true);
                             go.setAlpha(1f);
@@ -676,12 +694,6 @@ public final class Popup {
                 }
             });
 
-            TextView hidden = new TextView(context);
-            hidden.setText(Text.PROVE_HIDDEN);
-            hidden.setTextColor(skin.muted());
-            hidden.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-            hidden.setPadding(0, dp(context, 12), 0, 0);
-            card.addView(hidden);
 
             TextView why = new TextView(context);
             why.setText(Text.PROVE_WHY);

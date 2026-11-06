@@ -261,6 +261,7 @@ public final class Accent {
         memo = 0;
         translations=new java.util.concurrent.atomic.AtomicLongArray(256);
         recolouredBitmaps.clear();
+        untouchedBitmaps.clear();
         recolouredVectors.clear();
         plainVectors.clear();
         plainPictures.clear();
@@ -357,6 +358,15 @@ public final class Accent {
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Bitmap, Bitmap>());
 
     /**
+     * Pictures already looked at and left as they are, with the accent they were
+     * looked at for. Most of TikTok's pictures have no red in them, and the same
+     * few come back with every video: each time all their pixels were read into
+     * a new array, hashed, and asked of the cache on disk, on the main thread.
+     */
+    private static final java.util.Map<Bitmap, Integer> untouchedBitmaps =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Bitmap, Integer>());
+
+    /**
      * A picture whose pixels are TikTok's red, moved without asking its name.
      *
      * The names of TikTok's resources are stripped from the apk, so a rule that
@@ -372,6 +382,8 @@ public final class Accent {
             if (source == null || source.isRecycled()) return drawable;
             int width = source.getWidth(), height = source.getHeight();
             if (width * height > 160000) return drawable;
+            Integer looked = untouchedBitmaps.get(source);
+            if (looked != null && looked == target) return drawable;
             Bitmap known = recolouredBitmaps.get(source);
             Context context = Margy.context();
             Resources resources = context == null ? null : context.getResources();
@@ -390,7 +402,10 @@ public final class Accent {
                         + RecolourCache.hash(pixels, width, height) : null;
             if (diskKey != null) {
                 byte[] saved = RecolourCache.get(diskKey);
-                if (saved == RecolourCache.NONE) return drawable;
+                if (saved == RecolourCache.NONE) {
+                    untouchedBitmaps.put(source, target);
+                    return drawable;
+                }
                 Bitmap restored = saved == null ? null : RecolourCache.decode(saved);
                 if (restored != null && restored.getWidth() == width
                         && restored.getHeight() == height) {
@@ -410,6 +425,7 @@ public final class Accent {
             }
             if (!any) {
                 if (diskKey != null) RecolourCache.put(diskKey, null);
+                untouchedBitmaps.put(source, target);
                 return drawable;
             }
             Bitmap out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -877,13 +893,6 @@ public final class Accent {
 
     // ----------------------------------------------------- pictures by number
 
-    /**
-     * A picture asked for by number, which a texture pack may answer instead.
-     *
-     * Every one of these hands back what TikTok would have got when no pack is
-     * on or the pack has nothing at that path -- which is nearly every call,
-     * so the check has to be, and is, a flag and a lookup.
-     */
     /** Pictures asked for by number that had nothing to move, so that asking again is a lookup and not a read of every pixel. */
     private static final java.util.Set<Long> plainPictures = java.util.Collections.synchronizedSet(new java.util.HashSet<Long>());
 
@@ -911,7 +920,7 @@ public final class Accent {
     public static void setImageResource(ImageView view, int id) {
         {
             Drawable out = null;
-            if (colour() != TIKTOK) {
+            if (out == null && colour() != TIKTOK) {
                 try {
                     Drawable original = view.getContext().getDrawable(id);
                     Drawable changed = moved(original);

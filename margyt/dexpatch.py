@@ -446,6 +446,15 @@ ANCHORED_SOURCES.append((FEED_RING, "Landroid/graphics/Canvas;", "drawArc",
     "(Landroid/graphics/RectF;FFZLandroid/graphics/Paint;)V",
     "(Landroid/graphics/Canvas;Landroid/graphics/RectF;FFZLandroid/graphics/Paint;)V", AVATAR_SHAPE))
 CLASS_ANCHORED_SOURCES.add(FEED_RING)
+# The ring round the avatar of somebody who is live: a view that draws two
+# circles, the coloured ring and the gap inside it, with nothing cut out of a
+# path. It is on the profile, beside a video and in a push, and is the same
+# class everywhere (the one that cuts the LIVE badge out of it extends it).
+LIVE_RING = "LX/0GiC;"
+ANCHORED_SOURCES.append((LIVE_RING, "Landroid/graphics/Canvas;", "drawCircle",
+    "(FFFLandroid/graphics/Paint;)V",
+    "(Landroid/graphics/Canvas;FFFLandroid/graphics/Paint;)V", AVATAR_SHAPE))
+CLASS_ANCHORED_SOURCES.add(LIVE_RING)
 ANCHORED_SOURCES.append(("Lcom/ss/android/ugc/aweme/commentv2/commentlist/powercell/BaseCommentCell;",
     VIEW,"findViewById","(I)Landroid/view/View;","(Landroid/view/View;I)Landroid/view/View;",COMMENTS))
 for method in ("setIconRes", "setTintColor"):

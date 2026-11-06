@@ -80,8 +80,16 @@ public final class Streaks {
 
     private static final long EVERY = 15 * 60 * 1000L;
 
-    /** A conversation that is still grey after this many sends is left alone until tomorrow. */
-    private static final int MAX_ATTEMPTS = 3;
+    /**
+     * One sticker a day to a conversation, and no more.
+     *
+     * It used to be three, five minutes apart, while the flame stayed grey. But a TikTok
+     * streak only lights up once both people have written that day, so after our sticker
+     * the flame stays grey until the friend answers, and the mod took that for a lost send:
+     * people got exactly three stickers, exactly five minutes apart. A send that did not go
+     * through is not counted (see deliver), so it is still tried again.
+     */
+    private static final int MAX_ATTEMPTS = 1;
     /** How long to give a send before looking at the flame again, and sending once more if it is still grey. */
     private static final long RECHECK = 4 * 60 * 1000L;
     /** How long to watch the flame right after a send. */
@@ -770,12 +778,24 @@ public final class Streaks {
         }
     }
 
+    private static volatile boolean persistQueued;
+
+    /**
+     * Saved once, a moment after the last new one. Finding the friends at the
+     * start adds up to two hundred conversations one after another, and each
+     * used to write the whole list again on the main thread.
+     */
     private static void persistConversations() {
-        SharedPreferences p = prefs();
-        if (p == null) return;
-        org.json.JSONArray saved = new org.json.JSONArray();
-        for (String id : asked.keySet()) saved.put(id);
-        p.edit().putString(conversationKey(), saved.toString()).apply();
+        if (persistQueued) return;
+        persistQueued = true;
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            persistQueued = false;
+            SharedPreferences p = prefs();
+            if (p == null) return;
+            org.json.JSONArray saved = new org.json.JSONArray();
+            synchronized (asked) { for (String id : asked.keySet()) saved.put(id); }
+            p.edit().putString(conversationKey(), saved.toString()).apply();
+        }, 2000L);
     }
 
     private static void restoreConversations() {

@@ -112,7 +112,7 @@ final class MD3Progress {
                 synchronized (seekBars) {
                     seekBars.put(view, Boolean.TRUE);
                 }
-                if (view.getAlpha() != 0f) view.setAlpha(0f);
+                if (!labelled(view) && view.getAlpha() != 0f) view.setAlpha(0f);
                 // in the feed the wave is on each page's thin line; elsewhere there is no thin line,
                 // and the wave goes over the seek bar
                 if (!under(view, TAB_HOST)) applyOver(view);
@@ -265,8 +265,35 @@ final class MD3Progress {
     /** TikTok fades its seek bars in again by itself: asked every frame by a wave. */
     static void hideSeekBars() {
         synchronized (seekBars) {
-            for (View seek : seekBars.keySet()) if (seek.getAlpha() != 0f) seek.setAlpha(0f);
+            for (View seek : seekBars.keySet()) {
+                if (labelled(seek)) {
+                    if (seek.getAlpha() == 0f) seek.setAlpha(1f);
+                } else if (seek.getAlpha() != 0f) {
+                    seek.setAlpha(0f);
+                }
+            }
         }
+    }
+
+    /**
+     * A seek bar that has words in it is a chip of TikTok's (a template, a search) with the line
+     * under it: hiding the bar would hide the chip's words and picture, and leave its empty card.
+     */
+    static boolean labelled(View view) {
+        return labelled(view, 0);
+    }
+
+    private static boolean labelled(View view, int depth) {
+        if (depth > 8 || view == null) return false;
+        if (view instanceof android.widget.TextView) {
+            CharSequence text = ((android.widget.TextView) view).getText();
+            if (text != null && text.length() > 0 && view.getWidth() > 0) return true;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) if (labelled(group.getChildAt(i), depth + 1)) return true;
+        }
+        return false;
     }
 
     /** The wave is switched off: the seek bars are TikTok's again. */

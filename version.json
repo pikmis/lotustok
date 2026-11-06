@@ -1,8 +1,8 @@
 {
-  "_comment": "What the app checks to know whether it is out of date. Read from the repository's raw file every five minutes. `url` is the apk of this version as a release asset on GitHub.",
-  "version": "1.2.0",
-  "url": "https://github.com/pikmis/lotustok/releases/download/v1.2.0/lotustok-1.2.0.apk",
-  "notes": "Several photos at once, less battery and memory use, the preview under the settings, the badges always on.",
-  "notes_ru": "Несколько фото сразу, меньше батареи и памяти, превью под настройками, значки всегда включены.",
-  "notes_uk": "Кілька фото одразу, менше батареї й пам'яті, перегляд під налаштуваннями, значки завжди увімкнені."
+  "_comment": "What the app checks to know whether it is out of date. Served by our own server (tok.lotusgram.lol/updates). `url` is the apk of this version.",
+  "version": "1.3.0",
+  "url": "https://tok.lotusgram.lol/updates/lotustok-1.3.0.apk",
+  "notes": "A support section with the supporter badge and how to get it, the assistant in private messages, and the badge pictures on the server.",
+  "notes_ru": "Раздел «Поддержать проект» с бейджем саппортера и способами поддержки, помощник в личке, картинки бейджей с нашего сервера.",
+  "notes_uk": "Розділ «Підтримати проєкт» з бейджем підтримувача й способами підтримки, помічник в особистих, картинки бейджів із нашого сервера."
 }

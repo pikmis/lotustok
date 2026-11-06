@@ -27,6 +27,7 @@ public final class Dates {
         new android.os.Handler(android.os.Looper.getMainLooper()).post(()->{
             view.setTag(0x7e0d0334,aid);view.setTag(DateInfo.CELL_TAG,DateInfo.Data.of(post));authorRows.put(aid,new java.lang.ref.WeakReference<>(view));while(authorRows.size()>32)authorRows.remove(authorRows.keySet().iterator().next());
             String publication=label(NativeRead.number(NativeRead.get(post,"getCreateTime")),System.currentTimeMillis()/1000L);
+            RegionFlag.bind(view,post);
             DateOverlay.register(view,publication);
             if(aid.equals(selectedAid) && view.isShown())DateOverlay.bind(view,publication);
         });

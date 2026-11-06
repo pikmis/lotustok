@@ -26,6 +26,8 @@ PICTURE = "assets/bloom.png"
 LAYERS = 0x34
 BACKGROUND_ID = (LAYERS << 24) | (1 << 16)
 FOREGROUND_ID = BACKGROUND_ID + 1
+MARK_ID = BACKGROUND_ID + 2
+MARK_PATH = "res/margyt/bloom_mark.xml"
 BACKGROUND_PATH = "res/margyt/bloom_bg.xml"
 FOREGROUND_PATH = "res/margyt/bloom_fg.xml"
 
@@ -33,7 +35,11 @@ ICON = 0x35
 ICON_ID = (ICON << 24) | (1 << 16)
 ICON_PNG = "res/margyt/bloom.png"
 ICON_XML = "res/margyt/bloom.xml"
-SDK = 31
+SDK = 26
+# the flower of the picture itself, so the foreground sits exactly on the one in the background
+PETAL = 0xFF413A7E
+TYPE_COLOUR = 0x1C
+SHAPES = 0x40413A7E
 
 ACCENT1_100 = 0x0106003A
 ACCENT1_200 = 0x0106003B
@@ -74,7 +80,7 @@ def _vector(paths: Sequence[Tuple[int, str]]) -> bytes:
         element.name = path_name
         string_index = len(ATTR_NAMES) + index
         element.attributes = [
-            Attribute(uri, 4, NO_ENTRY, 8, 0, TYPE_REFERENCE, colour),
+            Attribute(uri, 4, NO_ENTRY, 8, 0, TYPE_REFERENCE if colour < 0x02000000 else TYPE_COLOUR, colour),
             Attribute(uri, 5, string_index, 8, 0, TYPE_STRING, string_index),
         ]
         closing = Node(RES_XML_END_ELEMENT, 1, NO_ENTRY)
@@ -91,7 +97,15 @@ def background() -> bytes:
     return _vector([(ACCENT1_100, GROUND), (ACCENT1_200, bloom_paths.BLOBS)])
 
 def foreground() -> bytes:
-    return _vector([(ACCENT1_700, bloom_paths.MARK)])
+    # nothing: the picture behind already has the flower, and a second one drawn over it
+    # never lines up exactly. The shape is kept for the themed icon, below.
+    return _vector([(PETAL, "M 0 0 Z")])
+
+def mark() -> bytes:
+    """The flower alone, for the themed (monochrome) icon the launcher tints."""
+    # the soft shapes of the picture too, at a fraction of the strength, so the tinted icon
+    # keeps them behind the flower
+    return _vector([(SHAPES, bloom_paths.BLOBS), (PETAL, bloom_paths.MARK)])
 
 def adaptive() -> bytes:
 
@@ -104,7 +118,7 @@ def adaptive() -> bytes:
     root.name = root_name
     root.attributes = []
     nodes: List[Node] = [open_ns, root]
-    for name, layer in ((4, BACKGROUND_ID), (5, FOREGROUND_ID), (6, FOREGROUND_ID)):
+    for name, layer in ((4, BACKGROUND_ID), (5, FOREGROUND_ID), (6, MARK_ID)):
         element = Node(RES_XML_START_ELEMENT, 1, NO_ENTRY)
         element.name = name
         element.attributes = [Attribute(uri, drawable, NO_ENTRY, 8, 0, TYPE_REFERENCE, layer)]

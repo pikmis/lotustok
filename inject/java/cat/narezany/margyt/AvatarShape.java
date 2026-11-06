@@ -144,6 +144,35 @@ public final class AvatarShape {
         canvas.drawArc(oval, start, sweep, useCentre, paint);
     }
 
+    private static final Path DISC = new Path();
+    private static final Matrix DISC_PLACE = new Matrix();
+
+    /**
+     * What the ring round the avatar of somebody who is live calls where it drew a circle.
+     *
+     * That ring is a view of its own that draws two circles, the coloured one and the gap inside
+     * it, so it stayed round on an avatar of any other shape. The shape fitted to the same circle,
+     * with the same paint, is the ring in the avatar's own shape.
+     */
+    public static void drawCircle(Canvas canvas, float x, float y, float radius, Paint paint) {
+        int shape = index();
+        if (shape > 0 && radius > 0) {
+            try {
+                synchronized (DISC) {
+                    DISC.rewind();
+                    DISC_PLACE.setScale(radius, radius);
+                    DISC_PLACE.postTranslate(x, y);
+                    DISC.addPath(unit(shape), DISC_PLACE);
+                    canvas.drawPath(DISC, paint);
+                }
+                return;
+            } catch (Throwable error) {
+                // a ring left round is better than no ring
+            }
+        }
+        canvas.drawCircle(x, y, radius, paint);
+    }
+
     /** The shape avatars are in at the moment, in a square two across. */
     static Path chosenUnit() {
         return unit(index());

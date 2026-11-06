@@ -195,8 +195,8 @@ def page(title, body, said=""):
 
 
 def sign_in_page(trouble=""):
-    return page("MargyT", """
-        <h1>MargyT</h1>
+    return page("LotusTok", """
+        <h1>LotusTok</h1>
         <p class=dim>Панель</p>
         <form class=card method=post action="/admin/in">
           <label>Имя</label><input name=user autocomplete=username>
@@ -221,7 +221,7 @@ def when(stamp):
     return "%d дн назад" % (gone // 86400)
 
 
-def main_page(badges, plugins, gradients=(), said="", crashes=()):
+def main_page(badges, plugins, gradients=(), said="", crashes=(), people=None):
     rows = []
     for badge in badges:
         rows.append(
@@ -264,9 +264,30 @@ def main_page(badges, plugins, gradients=(), said="", crashes=()):
             % (when(one["at"]), html.escape(one["mod"] or "?"),
                html.escape(one["what"] or "?"), html.escape(one["body"])))
 
-    return page("MargyT", """
-        <h1>MargyT</h1>
-        <p class=dim>Значки, плагины и градиенты</p>
+    people = people or {"total": 0, "day": 0, "week": 0, "bound": 0, "rows": []}
+    here = []
+    for one in people["rows"]:
+        here.append(
+            "<tr><td class=dim>%s</td><td class=dim>%s</td><td class=dim>%s</td>"
+            "<td class=dim>%s</td><td class=dim>%d</td><td class=dim>%s</td></tr>"
+            % (html.escape(one["uid"]), html.escape(one["version"] or "?"),
+               when(one["first"]), when(one["last"]), one["opens"],
+               html.escape(one["telegram"] or "-")))
+
+    return page("LotusTok", """
+        <h1>LotusTok</h1>
+        <p class=dim>Значки, плагины, градиенты и пользователи</p>
+
+        <h2>Пользователи</h2>
+        <div class=card>
+          <p>Всего: <b>%d</b> &nbsp; за сутки: <b>%d</b> &nbsp; за неделю: <b>%d</b>
+             &nbsp; подтверждено: <b>%d</b></p>
+          <table>
+            <tr><th>айди</th><th>версия</th><th>впервые</th><th>в сети</th>
+                <th>запусков</th><th>Telegram</th></tr>
+            %s
+          </table>
+        </div>
 
         <h2>Значки</h2>
         <div class=card><table>
@@ -288,7 +309,7 @@ def main_page(badges, plugins, gradients=(), said="", crashes=()):
             <div><label>название (ru)</label><input name=title_ru></div>
             <div><label>название (uk)</label><input name=title_uk></div>
           </div>
-          <label>текст</label><input name=text placeholder="поддержал разработку MargyT">
+          <label>текст</label><input name=text placeholder="поддержал разработку LotusTok">
           <div class=row>
             <div><label>текст (ru)</label><input name=text_ru></div>
             <div><label>текст (uk)</label><input name=text_uk></div>
@@ -334,7 +355,9 @@ def main_page(badges, plugins, gradients=(), said="", crashes=()):
         </form>
 
         <p><a class='button quiet' href="/admin/out">Выйти</a></p>
-        """ % ("".join(rows) or "<tr><td class=dim>пока пусто</td></tr>",
+        """ % (people["total"], people["day"], people["week"], people["bound"],
+               "".join(here) or "<tr><td class=dim>пока пусто</td></tr>",
+               "".join(rows) or "<tr><td class=dim>пока пусто</td></tr>",
                "".join(painted) or "<tr><td class=dim>пока пусто</td></tr>",
                "".join(packs) or "<tr><td class=dim>пока пусто</td></tr>",
                "".join(fallen) or "<tr><td class=dim>пока пусто</td></tr>"), said)
@@ -354,7 +377,7 @@ def badge_page(badge, wearers, said=""):
            html.escape(badge["id"]), html.escape(uid))
         for uid, shown, proved in wearers)
 
-    return page("MargyT", """
+    return page("LotusTok", """
         <h1>%s</h1>
         <p class=dim><img class=dot src='/icon/%s'> #%s</p>
 

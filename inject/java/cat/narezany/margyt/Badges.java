@@ -37,19 +37,17 @@ public final class Badges {
     private Badges() {}
 
     /**
-     * Where the badges live now.
-     *
-     * They used to be a file in the repository, which worked and cost nothing
-     * and had two limits worth leaving it for: granting one meant a commit,
-     * and nobody could decide anything about their own. So there is a small
-     * service instead, and it answers with the same shape the file had.
+     * Our own server: the badges, the pictures they name, the plugin catalogue, crash reports
+     * and everything else the mod asks over the network go through it. Granting a badge is done
+     * in its panel, and the app picks it up within a few minutes -- no new build.
      */
     public static final String SERVER = "https://tok.lotusgram.lol/api";
 
     private static final String SOURCE = SERVER + "/badges";
     private static final String FILES = SERVER + "/icon/";
 
-    private static final long EVERY = 2 * 60 * 1000L;
+    // the server answers 304 while nothing changed, so asking every few minutes costs a few hundred bytes
+    private static final long EVERY = 5 * 60 * 1000L;
 
     /** One badge, as the file describes it. */
     public static final class Badge {
@@ -74,7 +72,9 @@ public static final String KEY = "badges_on";
 
     private static volatile Boolean cached;
 
+    /** Always on: there is no switch for the badges any more. */
     public static boolean isEnabled() {
+        if (true) return true;
         Boolean known = cached;
         if (known != null) return known;
         try {
@@ -243,7 +243,8 @@ public static final String KEY = "badges_on";
         handler.post(new Runnable() {
             @Override
             public void run() {
-                refresh(application);
+                // a TikTok put away keeps running for hours: nothing is fetched for a screen nobody sees
+                if (Watch.here() != null) refresh(application);
                 handler.postDelayed(this, EVERY);
             }
         });
@@ -388,12 +389,31 @@ public static final String KEY = "badges_on";
                     if (!theirs.contains(badge)) theirs.add(badge);
                 }
             }
-            Badge[] order = new Badge[Math.min(distinct.size(), MOST)];
-            int at = 0;
-            for (Badge badge : distinct.keySet()) {
-                if (at == order.length) break;
-                order[at++] = badge;
+            // A badge keeps its number across refreshes. Names already on the screen carry the
+            // number as their mark, so renumbering on every refresh made badges swap or vanish
+            // until the view was drawn again.
+            Badge[] before = numbered;
+            java.util.ArrayList<Badge> slots = new java.util.ArrayList<Badge>();
+            java.util.ArrayList<Badge> fresh = new java.util.ArrayList<Badge>(distinct.keySet());
+            for (Badge old : before) {
+                Badge same = null;
+                if (old != null) {
+                    for (Badge candidate : fresh) {
+                        if (candidate.id.equals(old.id)) {
+                            same = candidate;
+                            break;
+                        }
+                    }
+                }
+                if (same != null) fresh.remove(same);
+                slots.add(same);
             }
+            for (Badge badge : fresh) {
+                int hole = slots.indexOf(null);
+                if (hole >= 0) slots.set(hole, badge);
+                else if (slots.size() < MOST) slots.add(badge);
+            }
+            Badge[] order = slots.toArray(new Badge[0]);
 
             Map<String, Badge[]> settled = new HashMap<String, Badge[]>(built.size());
             for (Map.Entry<String, java.util.List<Badge>> entry : built.entrySet()) {

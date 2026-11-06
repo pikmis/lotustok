@@ -31,6 +31,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import ai
 import badges as service
 import patcher
 import tiktok
@@ -45,6 +46,15 @@ SITE = os.environ.get("LOTUSTOK_SITE", "").rstrip("/")
 OWNER = int(os.environ.get("LOTUSTOK_OWNER") or 0)
 
 API = "https://api.telegram.org/bot%s/%s"
+
+#: the LotusTok forum: join notices in General are taken down, and each newcomer
+#: is greeted in the welcome topic
+FORUM = -1004457074564
+WELCOME_TOPIC = 387
+FAQ = "https://t.me/LotusTokFAQ"
+
+#: the name the assistant answers to, with an @ in front of it
+BOT_NAME = "lotustokapp"
 
 BROWSER = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
            " (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
@@ -439,9 +449,10 @@ def known_face(url):
 
 
 HELP = (
-    "<b>MargyT</b>\n\n"
+    "<b>LotusTok</b>\n\n"
     "<b>профиль</b> &lt;ник в тиктоке или айди&gt; — ник, аватарка и значки\n"
-    "<b>иконка</b> — пришли картинку документом и свой айди, попадёт владельцу\n\n"
+    "<b>иконка</b> — пришли картинку документом и свой айди, попадёт владельцу\n"
+    "<b>вериф</b> &lt;код&gt; — подтвердить аккаунт в LotusTok, код вида <code>XXXX-XXXX</code> из приложения (писать мне в личку)\n\n"
     "В любом чате можно написать <code>@%s ник</code> — покажет то же самое."
 )
 
@@ -455,6 +466,10 @@ def handle(update):
         return
 
     chat = message["chat"]["id"]
+    if chat == FORUM and message.get("new_chat_members"):
+        return welcome(message)
+    if chat == FORUM and message.get("left_chat_member"):
+        return goodbye(message)
     CURRENT.chat = chat
     CURRENT.topic = (message.get("message_thread_id")
                      if message.get("is_topic_message") else None)
@@ -478,7 +493,7 @@ def handle(update):
         code = text.split("p_", 1)[1].strip()
         name = from_who.get("first_name") or from_who.get("username") or ""
         if from_who.get("id") and patcher.claim(code, from_who["id"], name):
-            return say(chat, "Готово. Возвращайся в <b>Margy Patcher</b>.")
+            return say(chat, "Готово. Возвращайся в <b>LotusTok Patcher</b>.")
         return say(chat, "Этот вход уже не действует. Нажми «Войти через Telegram» "
                          "в патчере ещё раз.")
 
@@ -496,8 +511,31 @@ def handle(update):
         patcher.set_group(chat)
         return say(chat, "Запомнил: это группа поддержавших.")
 
+    # Proving an account: the code the app showed, typed here. Only in a
+    # private chat -- in a group everybody would read it.
+    if re.match(r"^(/verify|/вериф|вериф)(@\w+)?(\s|$)", low):
+        if message["chat"].get("type") != "private":
+            return say(chat, "Напиши мне это в личные сообщения: код никому не показывают.",
+                       message["message_id"])
+        typed = text.split(maxsplit=1)[1].strip() if len(text.split()) > 1 else ""
+        if not typed:
+            return say(chat, "Напиши код из приложения: <code>вериф XXXX-XXXX</code>",
+                       message["message_id"])
+        name = from_who.get("username") or from_who.get("first_name") or ""
+        status, _uid = service.redeem(typed, from_who.get("id") or 0, name)
+        answers = {
+            "ok": "Готово. Вернись в LotusTok и нажми «Проверить».",
+            "none": "Такого кода нет или он устарел. Открой «Подтвердить аккаунт» "
+                    "в LotusTok и возьми новый.",
+            "bound": "Этот аккаунт уже подтверждён с другого Telegram. "
+                     "Если это ошибка, напиши владельцу.",
+            "many": "К одному Telegram можно привязать не больше трёх аккаунтов.",
+            "slow": "Слишком много попыток. Подожди час и попробуй снова.",
+        }
+        return say(chat, answers.get(status, answers["none"]), message["message_id"])
+
     if low in ("/start", "/help", "помощь"):
-        me = call("getMe").get("result", {}).get("username", "margyt_bot")
+        me = call("getMe").get("result", {}).get("username", "lotustokapp")
         return say(chat, HELP % me)
 
     # One name to ask about, and it is the TikTok one. A telegram name is a
@@ -516,6 +554,56 @@ def handle(update):
     if low.startswith("иконка"):
         return say(chat, "Пришли картинку <b>документом</b>, а в подписи — "
                          "свой айди в тиктоке.")
+
+    # The assistant talks only once somebody asks it to: a command starts a
+    # conversation with that person in this chat, and it ends with another command
+    # or when it has been quiet for a while.
+    key = (chat, from_who.get("id") or 0)
+    # the assistant is for private messages only: in a group it does not answer at all
+    if message["chat"].get("type") != "private":
+        return None
+    if low in START or low.startswith(START_WORDS):
+        rest = text.split(maxsplit=1)[1].strip() if len(text.split()) > 1 else ""
+        ai.start(key)
+        if not rest:
+            return say(chat, italic("Привет! Задавай вопросы про LotusTok. "
+                                    "Чтобы закончить, напиши ии-стоп."),
+                       message["message_id"])
+        return assistant(message, chat, from_who, rest)
+    if low in STOP:
+        ai.stop(key)
+        return say(chat, italic("Диалог с ИИ-помощником закрыт."), message["message_id"])
+    if ai.talking(key):
+        return assistant(message, chat, from_who, text)
+
+
+#: the words that start and end a conversation with the assistant
+START = ("ии-помощь", "/ai", "/ии")
+START_WORDS = tuple(word + " " for word in START)
+STOP = ("ии-стоп", "/ai_stop", "/ии_стоп")
+
+
+def italic(text):
+    """Text in italics, escaped: how the assistant's words are written."""
+    return "<i>%s</i>" % html.escape(text)
+
+
+def assistant(message, chat, from_who, question):
+    """Answer one question of a conversation, with a note that it is an AI and may be wrong."""
+    who = from_who.get("id") or 0
+    if not ai.allowed(str(who)):
+        return say(chat, italic("Ты уже много спросил за пару минут. Подожди немного и спроси снова."),
+                   message["message_id"])
+    answer, problems = ai.ask(question, (chat, who))
+    if answer is None:
+        if OWNER:
+            say(OWNER, "ИИ не ответил.\nВопрос: %s\nПричины:\n%s" % (
+                html.escape(question[:300]),
+                html.escape("\n".join(problems) or "неизвестно")))
+        return say(chat, italic("Сейчас не получается ответить, попробуй чуть позже."),
+                   message["message_id"])
+    return say(chat, "<b>%s</b>\n\n<i>%s</i>" % (html.escape(answer), html.escape(ai.NOTE)),
+               message["message_id"])
 
 
 def offered(message, chat, from_who, caption):

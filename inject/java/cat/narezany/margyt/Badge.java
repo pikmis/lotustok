@@ -519,6 +519,18 @@ public final class Badge {
             if (Version.TEST || Version.LITE) android.util.Log.i("MargyT", "badge: tapped, in " + widget.getContext());
             String head = badge.title != null && badge.title.length() > 0
                     ? badge.title : "LotusTok";
+            if (SupportCard.isSupporter(badge)) {
+                // the supporter's badge leads to how to get one
+                final android.content.Context where = widget.getContext();
+                Popup.show(where, head, badge.text, badge.button, large(widget, badge),
+                        Local.of("Поддержать проект"), new Runnable() {
+                            @Override
+                            public void run() {
+                                SupportCard.show(where);
+                            }
+                        });
+                return;
+            }
             Popup.show(widget.getContext(), head, badge.text, badge.button,
                     large(widget, badge));
         }

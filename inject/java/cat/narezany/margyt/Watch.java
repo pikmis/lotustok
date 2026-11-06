@@ -32,6 +32,8 @@ public final class Watch implements Application.ActivityLifecycleCallbacks {
     @Override
     public void onActivityResumed(Activity activity) {
         here = new java.lang.ref.WeakReference<Activity>(activity);
+        FlagGuard.shown();
+        Presence.resumed();
         try {
             Rate.apply(activity);
         } catch (Throwable ignored) {
@@ -64,6 +66,7 @@ public final class Watch implements Application.ActivityLifecycleCallbacks {
     @Override
     public void onActivityPaused(Activity activity) {
         Ghost.paused(activity);
+        Presence.paused();
         if (here.get() == activity) {
             here = new java.lang.ref.WeakReference<Activity>(null);
         }

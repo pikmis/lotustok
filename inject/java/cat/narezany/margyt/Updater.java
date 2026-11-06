@@ -34,9 +34,9 @@ public final class Updater {
 
     private Updater() {}
 
-    /** The repository's own file: what the latest LotusTok is and where its apk is. Read raw, so no server is needed. */
+    /** Our own server's file: what the latest LotusTok is and where its apk is. */
     private static final String SOURCE =
-            "https://raw.githubusercontent.com/pikmis/lotustok/main/version.json";
+            "https://tok.lotusgram.lol/updates/version.json";
 
     public static final String KEY_REMIND = "update_remind";
 

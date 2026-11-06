@@ -51,6 +51,12 @@ final class RepostPurge {
 
     private static volatile boolean counting, running, cancelled;
 
+    private static final Runnable STOP = new Runnable() {
+        @Override public void run() {
+            cancelled = true;
+        }
+    };
+
     private static final class Entry {
         String item = "", repost = "";
         int carrier;
@@ -150,7 +156,7 @@ final class RepostPurge {
         phase = "Считаем ваши репосты...";
         doneNow = 0;
         totalNow = 0;
-        final Waiting waiting = screen(activity, Local.of("Считаем ваши репосты..."));
+        final Waiting waiting = screen(activity, Local.of("Считаем ваши репосты..."), STOP);
         waiting.dialog.show();
         status(Local.of("Считаем ваши репосты..."), 0, 0, true);
         new Thread(new Runnable() {
@@ -312,6 +318,10 @@ final class RepostPurge {
 
     /** The line in the notification shade: what is being done, and how far it has got. */
     private static void status(String text, int at, int of, boolean going) {
+        status(Local.of("Удаление репостов"), 4711, text, at, of, going);
+    }
+
+    static void status(String title, int id, String text, int at, int of, boolean going) {
         long now = SystemClock.uptimeMillis();
         if (going && now - lastNote < 800L) return;
         lastNote = now;
@@ -321,15 +331,16 @@ final class RepostPurge {
             android.app.NotificationManager manager =
                     (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             android.app.Notification.Builder builder;
+            String channel = id == 4711 ? "margyt_purge" : "margyt_purge_" + id;
             if (android.os.Build.VERSION.SDK_INT >= 26) {
-                manager.createNotificationChannel(new android.app.NotificationChannel("margyt_purge",
-                        Local.of("Удаление репостов"), android.app.NotificationManager.IMPORTANCE_LOW));
-                builder = new android.app.Notification.Builder(context, "margyt_purge");
+                manager.createNotificationChannel(new android.app.NotificationChannel(channel,
+                        title, android.app.NotificationManager.IMPORTANCE_LOW));
+                builder = new android.app.Notification.Builder(context, channel);
             } else {
                 builder = new android.app.Notification.Builder(context);
             }
             builder.setSmallIcon(android.R.drawable.stat_notify_sync)
-                    .setContentTitle(Local.of("Удаление репостов"))
+                    .setContentTitle(title)
                     .setContentText(text)
                     .setOnlyAlertOnce(true)
                     .setOngoing(going);
@@ -337,7 +348,7 @@ final class RepostPurge {
                 if (of > 0) builder.setProgress(of, at, false);
                 else builder.setProgress(0, 0, true);
             }
-            manager.notify(4711, builder.build());
+            manager.notify(id, builder.build());
         } catch (Throwable ignored) {
         }
     }
@@ -368,7 +379,7 @@ final class RepostPurge {
         Diary.note("repost purge: " + entry.item + " -> " + describe(response));
     }
 
-    private static Object call(Method method, Object on, Object... arguments) throws Throwable {
+    static Object call(Method method, Object on, Object... arguments) throws Throwable {
         try {
             return method.invoke(on, arguments);
         } catch (InvocationTargetException error) {
@@ -376,7 +387,7 @@ final class RepostPurge {
         }
     }
 
-    private static String describe(Object thing) {
+    static String describe(Object thing) {
         if (thing == null) return "null";
         String text = String.valueOf(thing);
         return thing.getClass().getSimpleName() + (text.length() > 160 ? text.substring(0, 160) : text);
@@ -392,7 +403,7 @@ final class RepostPurge {
         phase = "Удаляем ваши репосты...";
         doneNow = 0;
         totalNow = entries.size();
-        final Waiting waiting = screen(activity, Local.of("Удаляем ваши репосты..."));
+        final Waiting waiting = screen(activity, Local.of("Удаляем ваши репосты..."), STOP);
         final Dialog dialog = waiting.dialog;
         dialog.show();
         status(Local.of("Удаляем ваши репосты..."), 0, entries.size(), true);
@@ -466,7 +477,7 @@ final class RepostPurge {
     // ------------------------------------------------------------ the screen
 
     /** A whole page: the turning ring in the middle, what is being done under it, and the way out. */
-    private static Waiting screen(final Activity activity, String text) {
+    static Waiting screen(final Activity activity, String text, final Runnable stop) {
         Skin skin = Skin.remembered(activity);
         final Dialog dialog = new Dialog(activity, android.R.style.Theme_Material_NoActionBar);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -511,7 +522,7 @@ final class RepostPurge {
         cancel.setBackground(outline);
         cancel.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                cancelled = true;
+                stop.run();
                 words.setText(Local.of("Останавливаем..."));
                 v.setEnabled(false);
                 v.setAlpha(0.5f);
@@ -545,14 +556,14 @@ final class RepostPurge {
         // back is the same as the button: the work stops after the repost it is on
         dialog.setOnCancelListener(new android.content.DialogInterface.OnCancelListener() {
             @Override public void onCancel(android.content.DialogInterface d) {
-                cancelled = true;
+                stop.run();
             }
         });
         return new Waiting(dialog, words);
     }
 
     /** The page that is on the screen, and the words under its ring. */
-    private static final class Waiting {
+    static final class Waiting {
         final Dialog dialog;
         final TextView words;
 
@@ -630,7 +641,7 @@ final class RepostPurge {
         }
     }
 
-    private static int dp(Context context, int value) {
+    static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
     }
 }
