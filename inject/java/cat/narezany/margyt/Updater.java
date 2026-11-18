@@ -36,7 +36,7 @@ public final class Updater {
 
     /** Our own server's file: what the latest LotusTok is and where its apk is. */
     private static final String SOURCE =
-            "https://tok.lotusgram.lol/updates/version.json";
+            "https://tok.lotustok.bond/updates/version.json";
 
     public static final String KEY_REMIND = "update_remind";
 
@@ -115,6 +115,11 @@ public final class Updater {
     /** Whether what the repository has is ahead of what is installed. */
     public static boolean newer() {
         return compare(latest, Version.MOD) > 0 && where != null && where.length() > 0;
+    }
+
+    /** Whether the version the server hands out is any other than the one installed: ahead or behind. */
+    public static boolean differs() {
+        return latest != null && latest.length() > 0 && compare(latest, Version.MOD) != 0;
     }
 
     public static String latest() {

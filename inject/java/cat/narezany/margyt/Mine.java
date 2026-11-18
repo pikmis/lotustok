@@ -139,6 +139,7 @@ public final class Mine {
     }
 
     static void read(JSONObject answer) {
+        Frames.readMine(answer);
         JSONArray list = answer.optJSONArray("badges");
         if (list == null) return;
         List<Held> built = new ArrayList<Held>();

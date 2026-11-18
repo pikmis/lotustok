@@ -54,10 +54,16 @@ final class CommentVotes {
                 .edit().putBoolean(KEY, value).apply();
     }
 
+    private static final int TAG_WATCHING = 0x7f5a0113;
+
     /** Keeps watching the screen the comments are on, so each comment that comes up gets its chevrons. */
     static void attach(Activity activity) {
         if (activity == null) return;
         final View root = activity.getWindow().getDecorView();
+        // once per screen: a listener added each time the screen came up stayed for good, and each of
+        // them walked the whole screen on every frame
+        if (root.getTag(TAG_WATCHING) != null) return;
+        root.setTag(TAG_WATCHING, Boolean.TRUE);
         // every frame, not only on layout: TikTok puts its own icon back when a vote is cast, and nothing lays out then
         root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override

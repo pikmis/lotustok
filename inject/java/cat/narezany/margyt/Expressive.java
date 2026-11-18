@@ -1,5 +1,6 @@
 package cat.narezany.margyt;
 
+import android.widget.TextView;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.ColorStateList;
@@ -102,6 +103,35 @@ final class Expressive {
         double start = Math.toRadians(turn) - Math.PI / 2.0;
         double wave = Math.cos(n * (angle - start));
         return (float) (1.0 - depth * (1.0 - wave));
+    }
+
+    /** Relative luminance of an opaque colour, as WCAG reckons it. */
+    private static double luminance(int colour) {
+        double[] part = {Color.red(colour) / 255.0, Color.green(colour) / 255.0, Color.blue(colour) / 255.0};
+        for (int i = 0; i < 3; i++) {
+            part[i] = part[i] <= 0.03928 ? part[i] / 12.92 : Math.pow((part[i] + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * part[0] + 0.7152 * part[1] + 0.0722 * part[2];
+    }
+
+    /** The contrast ratio of ink on a background; ink that is see-through is first laid over it. */
+    static double ratio(int ink, int background) {
+        int back = background | 0xFF000000;
+        int seen = Color.alpha(ink) == 255 ? ink : mix(back, ink | 0xFF000000, Color.alpha(ink) / 255f);
+        double a = luminance(seen) + 0.05, b = luminance(back) + 0.05;
+        return Math.max(a, b) / Math.min(a, b);
+    }
+
+    /**
+     * Ink that can be read on both backgrounds: the colour given, moved toward `toward` in steps until
+     * the contrast is at least 4.5, which is what text needs.
+     */
+    static int readable(int ink, int first, int second, int toward) {
+        for (int step = 0; step <= 10; step++) {
+            int candidate = mix(ink, toward, step / 10f) | 0xFF000000;
+            if (ratio(candidate, first) >= 4.5 && ratio(candidate, second) >= 4.5) return candidate;
+        }
+        return toward | 0xFF000000;
     }
 
     static int mix(int from, int to, float amount) {

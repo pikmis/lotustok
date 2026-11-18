@@ -69,6 +69,13 @@ public static final String KEY = "save_avatars";
         return remember(user, user == null ? null : user.getAvatar300());
     }
 
+    /** The small one, for lists. Not worth saving; a frame wants it, though. */
+    public static UrlModel getAvatarThumb(User user) {
+        UrlModel url = user == null ? null : user.getAvatarThumb();
+        if (user != null) Frames.saw(user.getUid(), url);
+        return url;
+    }
+
     public static UrlModel getAvatarMedium(User user) {
         return remember(user, user == null ? null : user.getAvatarMedium());
     }
@@ -88,6 +95,7 @@ public static final String KEY = "save_avatars";
 
     private static UrlModel remember(User user, UrlModel url) {
         if (url == null) return null;
+        if (user != null) Frames.saw(user.getUid(), url);
         try {
             if (usable(url)) {
                 latest = url;

@@ -1,7 +1,7 @@
 {
-  "_comment": "What the app checks to know whether it is out of date. Served by our own server (tok.lotusgram.lol/updates). `url` is the apk of this version.",
-  "version": "1.3.0",
-  "url": "https://tok.lotusgram.lol/updates/lotustok-1.3.0.apk",
+  "_comment": "What the app checks to know whether it is out of date. Served by our own server (tok.lotustok.bond/updates). `url` is the apk of this version.",
+  "version": "1.4.0",
+  "url": "https://tok.lotustok.bond/updates/lotustok-1.4.0.apk",
   "notes": "A support section with the supporter badge and how to get it, the assistant in private messages, and the badge pictures on the server.",
   "notes_ru": "Раздел «Поддержать проект» с бейджем саппортера и способами поддержки, помощник в личке, картинки бейджей с нашего сервера.",
   "notes_uk": "Розділ «Підтримати проєкт» з бейджем підтримувача й способами підтримки, помічник в особистих, картинки бейджів із нашого сервера."

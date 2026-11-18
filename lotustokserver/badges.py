@@ -207,6 +207,31 @@ def prepare():
             ip      TEXT PRIMARY KEY,
             written INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS frame (
+            id       TEXT PRIMARY KEY,
+            image    TEXT NOT NULL DEFAULT '',
+            scale    REAL NOT NULL DEFAULT 1.5,
+            dy       REAL NOT NULL DEFAULT 0,
+            badge    TEXT NOT NULL DEFAULT '',
+            place    INTEGER NOT NULL DEFAULT 0,
+            title    TEXT NOT NULL DEFAULT '',
+            title_ru TEXT NOT NULL DEFAULT '',
+            title_uk TEXT NOT NULL DEFAULT '',
+            text     TEXT NOT NULL DEFAULT '',
+            text_ru  TEXT NOT NULL DEFAULT '',
+            text_uk  TEXT NOT NULL DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS frame_given (
+            uid      TEXT NOT NULL,
+            frame    TEXT NOT NULL,
+            given_at INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (uid, frame)
+        );
+        CREATE TABLE IF NOT EXISTS worn (
+            uid     TEXT PRIMARY KEY,
+            frame   TEXT NOT NULL DEFAULT '',
+            changed INTEGER NOT NULL DEFAULT 0
+        );
         CREATE TABLE IF NOT EXISTS plugin (
             id      TEXT PRIMARY KEY,
             name    TEXT NOT NULL DEFAULT '',
@@ -266,6 +291,9 @@ def prepare():
                          ("name", "TEXT NOT NULL DEFAULT ''")):
         if column not in owner_columns:
             db.execute("ALTER TABLE owner ADD COLUMN %s %s" % (column, kind))
+    for row in FRAMES:
+        db.execute("INSERT OR IGNORE INTO frame (id, image, scale, dy, badge, place, title, title_ru, title_uk,"
+                   " text, text_ru, text_uk) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", row)
     dep.prepare(db)
     db.commit()
     db.close()
@@ -362,6 +390,98 @@ def vouched(db, body):
     return uid
 
 
+# ------------------------------------------------------- frames round an avatar
+
+#: The frames that come with the service. More can go into the table by hand, or through the panel.
+FRAMES = (
+    ("owner", "frame_owner.png", 1.85, 0.0, "founder", 0,
+     "Crown", "Корона", "Корона",
+     "This is the person who makes LotusTok.",
+     "Этот человек делает LotusTok.",
+     "Ця людина робить LotusTok."),
+    (SUPPORTER, "frame_supporter.png", 1.55, 0.0, "supporter_lotustok", 1,
+     "Angel's glow", "Ангельское свечение", "Янгольське сяйво",
+     "Shines for supporting LotusTok.",
+     "Светится за поддержку LotusTok.",
+     "Сяє за підтримку LotusTok."),
+)
+
+
+def frames_of(db, uid=None):
+    """Who holds which frame: by holding the badge it comes with, or by being given it.
+
+    With `uid`, a list of that account's frames, best first. Without, every account's.
+    """
+    rows = db.execute("SELECT id, badge FROM frame ORDER BY place, id").fetchall()
+    order = [row[0] for row in rows]
+    out = {}
+    for frame, badge in rows:
+        query = "SELECT uid FROM held WHERE badge = ?" + (" AND uid = ?" if uid else "")
+        for (who,) in db.execute(query, (badge, uid) if uid else (badge,)):
+            out.setdefault(who, set()).add(frame)
+    query = "SELECT uid, frame FROM frame_given" + (" WHERE uid = ?" if uid else "")
+    for who, frame in db.execute(query, (uid,) if uid else ()):
+        if frame in order:
+            out.setdefault(who, set()).add(frame)
+    ranked = {who: [frame for frame in order if frame in theirs] for who, theirs in out.items()}
+    return ranked.get(uid, []) if uid else ranked
+
+
+def frames_for_panel():
+    db = connect()
+    out = []
+    for row in db.execute("SELECT id, image, title_ru, title, text_ru, badge FROM frame ORDER BY place, id").fetchall():
+        by_badge = db.execute("SELECT COUNT(*) FROM held WHERE badge = ?", (row[5],)).fetchone()[0]
+        by_hand = db.execute("SELECT COUNT(*) FROM frame_given WHERE frame = ?", (row[0],)).fetchone()[0]
+        out.append({"id": row[0], "image": row[1], "title": row[2] or row[3], "text": row[4],
+                    "by_badge": by_badge, "by_hand": by_hand})
+    db.close()
+    return out
+
+
+def wearing(holds, choice):
+    """What an account shows: what it chose if it can, nothing if it chose that, else its best."""
+    if choice is None:
+        return holds[0] if holds else ""
+    if choice == "":
+        return ""
+    return choice if choice in holds else (holds[0] if holds else "")
+
+
+def mine_frames(db, uid):
+    holds = frames_of(db, uid)
+    row = db.execute("SELECT frame FROM worn WHERE uid = ?", (uid,)).fetchone()
+    return {"frames": holds, "worn": wearing(holds, row[0] if row else None)}
+
+
+def wear(body, ip):
+    """Which of its frames an account shows, or none. Only with the proved key, like the badges."""
+    db = connect()
+    uid = vouched(db, body)
+    if not uid:
+        db.close()
+        return 403, {"error": "prove"}
+    wait = too_soon(db, uid, ip)
+    if wait:
+        db.close()
+        return 429, {"error": "too often", "wait": wait}
+    frame = body.get("frame") or ""
+    if not isinstance(frame, str):
+        db.close()
+        return 400, {"error": "that is not a frame"}
+    if frame and frame not in frames_of(db, uid):
+        db.close()
+        return 403, {"error": "not yours"}
+    db.execute("INSERT INTO worn (uid, frame, changed) VALUES (?,?,?)"
+               " ON CONFLICT(uid) DO UPDATE SET frame = excluded.frame, changed = excluded.changed",
+               (uid, frame, int(time.time())))
+    wrote(db, uid, ip)
+    db.commit()
+    out = mine_frames(db, uid)
+    db.close()
+    return 200, out
+
+
 def public():
     """Every badge and who wears it, in the shape the mod already reads."""
     db = connect()
@@ -388,11 +508,36 @@ def public():
     gradients = {uid: colours.split(",") for uid, colours
                  in db.execute("SELECT uid, colours FROM gradient")
                  if uid in paid and colours}
+    frames = [{"id": row[0], "image": stamped(row[1]), "scale": row[2], "dy": row[3], "title": row[4],
+               "title_ru": row[5], "title_uk": row[6], "text": row[7], "text_ru": row[8], "text_uk": row[9],
+               "shapes": frame_shapes(row[1])}
+              for row in db.execute("SELECT id, image, scale, dy, title, title_ru, title_uk, text, text_ru, text_uk"
+                                    " FROM frame ORDER BY place, id")]
+    chosen = dict(db.execute("SELECT uid, frame FROM worn"))
+    worn = {}
+    for uid, holds in frames_of(db).items():
+        frame = wearing(holds, chosen.get(uid))
+        if frame:
+            worn[uid] = frame
     db.close()
 
     out = [badges[key] for key in sorted(badges)]
-    return {"badges": out, "gradients": gradients,
+    return {"badges": out, "gradients": gradients, "frames": frames, "worn": worn,
             "free_until": FREE_UNTIL, "now": int(time.time())}
+
+
+def frame_shapes(image):
+    """A frame drawn once for each avatar shape (frame_x_<shape>.png beside frame_x.png): the app
+    takes the one for the shape chosen in its settings, older apps keep drawing frame_x.png."""
+    base = os.path.basename(image.split("?")[0])[:-len(".png")] + "_"
+    out = {}
+    try:
+        for name in os.listdir(ICONS):
+            if name.startswith(base) and name.endswith(".png"):
+                out[name[len(base):-len(".png")]] = stamped(name)
+    except OSError:
+        pass
+    return out
 
 
 def mine(uid):
@@ -419,8 +564,9 @@ def claim(uid, ip):
     db = connect()
     row = db.execute("SELECT proved FROM owner WHERE uid = ?", (uid,)).fetchone()
     proved = bool(row and row[0])
+    framed = mine_frames(db, uid)
     db.close()
-    return 200, {"uid": uid, "proved": proved, "badges": mine(uid)}
+    return 200, {"uid": uid, "proved": proved, "badges": mine(uid), **framed}
 
 
 # ------------------------------------------------- proving an account is yours
@@ -660,8 +806,9 @@ def prove_check(body, ip):
     db.execute("DELETE FROM proofs WHERE uid = ?", (uid,))
     db.commit()
     out = mine(uid)
+    framed = mine_frames(db, uid)
     db.close()
-    return 200, {"uid": uid, "token": token, "proved": True, "badges": out}
+    return 200, {"uid": uid, "token": token, "proved": True, "badges": out, **framed}
 
 
 # ------------------------------------------------------------ who is here
@@ -1312,7 +1459,7 @@ class Handler(BaseHTTPRequestHandler):
                            " ORDER BY changed DESC")]
             db.close()
             self.html(panel.main_page(badges, plugins()["plugins"], colours,
-                                      query.get("said", [""])[0], crashes(), people()))
+                                      query.get("said", [""])[0], crashes(), people(), frames_for_panel()))
             return
 
         if path == "/admin/badge":
@@ -1446,6 +1593,87 @@ class Handler(BaseHTTPRequestHandler):
             db.commit()
             db.close()
             self.go("/admin?said=значок %s готов" % which)
+            return
+
+        if path == "/admin/frame/new":
+            try:
+                form = cgi.FieldStorage(
+                    fp=self.rfile, headers=self.headers,
+                    environ={"REQUEST_METHOD": "POST",
+                             "CONTENT_TYPE": self.headers.get("Content-Type", "")})
+            except Exception as trouble:
+                self.go("/admin?said=не вышло: %s" % trouble)
+                return
+
+            def field(name):
+                try:
+                    return (form.getfirst(name) or "").strip()
+                except Exception:
+                    return ""
+
+            which = field("id")
+            if not named(which):
+                self.go("/admin?said=id: буквы, цифры, точка, дефис")
+                return
+            try:
+                scale = min(4.0, max(0.5, float(field("scale") or "1.5")))
+                dy = min(1.0, max(-1.0, float(field("dy") or "0")))
+            except ValueError:
+                self.go("/admin?said=размер и сдвиг — числа")
+                return
+            try:
+                item = form["picture"]
+                raw = item.file.read(2 * 1024 * 1024 + 1) if item.filename else b""
+            except Exception:
+                raw = b""
+            if len(raw) > 2 * 1024 * 1024:
+                self.go("/admin?said=картинка больше 2 МБ")
+                return
+            if raw and raw[:8] != bytes.fromhex("89504e470d0a1a0a"):
+                self.go("/admin?said=нужен PNG")
+                return
+            db = connect()
+            old = db.execute("SELECT image FROM frame WHERE id = ?", (which,)).fetchone()
+            if not raw and not old:
+                db.close()
+                self.go("/admin?said=для новой рамки нужна картинка")
+                return
+            picture = old[0] if old and not raw else "frame_%s.png" % which
+            if raw:
+                with open(os.path.join(ICONS, picture), "wb") as handle:
+                    handle.write(raw)
+            place = (db.execute("SELECT COALESCE(MAX(place), 0) + 1 FROM frame").fetchone()[0])
+            db.execute(
+                "INSERT INTO frame (id, image, scale, dy, badge, place, title, title_ru, title_uk,"
+                " text, text_ru, text_uk) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+                " ON CONFLICT(id) DO UPDATE SET image=excluded.image, scale=excluded.scale, dy=excluded.dy,"
+                " badge=excluded.badge, title=excluded.title, title_ru=excluded.title_ru,"
+                " title_uk=excluded.title_uk, text=excluded.text, text_ru=excluded.text_ru,"
+                " text_uk=excluded.text_uk",
+                (which, picture, scale, dy, field("badge"), place,
+                 field("title") or which, field("title_ru"), field("title_ru"),
+                 field("text"), field("text_ru"), field("text_ru")))
+            db.commit()
+            db.close()
+            self.go("/admin?said=рамка %s готова" % which)
+            return
+
+        if path in ("/admin/frame/give", "/admin/frame/take"):
+            said = self.form()
+            which = said.get("id", "")
+            db = connect()
+            if db.execute("SELECT 1 FROM frame WHERE id = ?", (which,)).fetchone():
+                for uid in (said.get("uids") or "").replace(",", " ").split():
+                    if not sane(uid):
+                        continue
+                    if path.endswith("give"):
+                        db.execute("INSERT OR IGNORE INTO frame_given (uid, frame, given_at) VALUES (?,?,?)",
+                                   (uid, which, int(time.time())))
+                    else:
+                        db.execute("DELETE FROM frame_given WHERE uid = ? AND frame = ?", (uid, which))
+                db.commit()
+            db.close()
+            self.go("/admin")
             return
 
         if path == "/admin/badge/give":
@@ -1630,6 +1858,8 @@ class Handler(BaseHTTPRequestHandler):
             code, out = prove(body, ip)
         elif path == "/prove/check":
             code, out = prove_check(body, ip)
+        elif path == "/frame":
+            code, out = wear(body, ip)
         elif path == "/seen":
             code, out = seen(body, ip)
         elif path == "/profile":

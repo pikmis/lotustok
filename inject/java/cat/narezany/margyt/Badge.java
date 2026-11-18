@@ -112,7 +112,10 @@ public final class Badge {
             String own = Plugins.name(uid, strip(name));
             remember(uid, own, fromProfile);
             String marks = Badges.marksFor(uid) + Looks.mark(uid);
-            if (marks.length() > 0) return own + '\u2009' + marks;
+            if (marks.length() > 0) {
+                lastMarkAt = android.os.SystemClock.uptimeMillis();
+                return own + '\u2009' + marks;
+            }
             return own;
         } catch (Throwable ignored) {
             return name;
@@ -205,8 +208,53 @@ public final class Badge {
         }
     }
 
+    /** When a name was last given marks: a screen is looked over for them only for a little while after. */
+    private static volatile long lastMarkAt;
+
+    /**
+     * Turn marks that are still plain characters into their pictures.
+     *
+     * Most names pass through `setText` and are dressed on the way in. Some views set their text
+     * by another road -- the name on a profile among them -- and the marks stay in it as
+     * invisible characters, with nothing drawn. For a few seconds after a name has been marked
+     * the screen is walked, and any text that holds a mark and no picture is put through here.
+     */
+    private static void sweepMarks(View view, int depth) {
+        if (view == null || depth > DEEP || ++seen > BUDGET) return;
+        if (inAList(view)) return;
+        if (view instanceof TextView && !(view instanceof android.widget.EditText)) {
+            TextView text = (TextView) view;
+            CharSequence showing = text.getText();
+            if (showing != null && showing.length() > 0 && holdsMark(showing)
+                    && !(showing instanceof Spanned && ((Spanned) showing)
+                    .getSpans(0, showing.length(), ClickableSpan.class).length > 0)) {
+                setText(text, showing);
+            }
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0, many = group.getChildCount(); i < many; i++) sweepMarks(group.getChildAt(i), depth + 1);
+        }
+    }
+
+    private static boolean holdsMark(CharSequence text) {
+        for (int i = text.length() - 1; i >= 0; i--) {
+            char c = text.charAt(i);
+            if (c < '\uE000' || c > '\uF8FF') continue;
+            if (Badges.isMark(c) || Looks.isMark(c)) return true;
+        }
+        return false;
+    }
+
     /** Put the mark back on the profile name that was read a moment ago. */
     public static void rewrite(View root) {
+        if (root != null && android.os.SystemClock.uptimeMillis() - lastMarkAt < RECENT) {
+            try {
+                seen = 0;
+                sweepMarks(root, 0);
+            } catch (Throwable ignored) {
+            }
+        }
         String name = lastName;
         String uid = lastUid;
         if (root == null || name == null || uid == null) return;

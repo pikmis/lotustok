@@ -33,6 +33,9 @@ final class Local {
     }
 
     static {
+        add("есть обновление", "є оновлення", "update available");
+        add("актуальная", "актуальна", "up to date");
+        add("неактуальная", "неактуальна", "outdated");
         add("Код плагина не удалось разобрать: ",
                 "Код плагіна не вдалося розібрати: ",
                 "The plugin's code could not be read: ");

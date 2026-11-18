@@ -41,7 +41,7 @@ public final class Badges {
      * and everything else the mod asks over the network go through it. Granting a badge is done
      * in its panel, and the app picks it up within a few minutes -- no new build.
      */
-    public static final String SERVER = "https://tok.lotusgram.lol/api";
+    public static final String SERVER = "https://tok.lotustok.bond/api";
 
     private static final String SOURCE = SERVER + "/badges";
     private static final String FILES = SERVER + "/icon/";
@@ -360,6 +360,7 @@ public static final String KEY = "badges_on";
             }
 
             Looks.learn(root);
+            Frames.learn(root);
 
             Map<String, java.util.List<Badge>> built =
                     new HashMap<String, java.util.List<Badge>>();

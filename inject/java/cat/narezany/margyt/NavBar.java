@@ -152,6 +152,28 @@ final class NavBar {
         if (prefs != null) prefs.edit().putBoolean(KEY_NAMES, on).apply();
     }
 
+    /** How the bar looks: the capsule it has been, or the floating one with a round button apart. */
+    static final String KEY_STYLE = "nav_style";
+    static final int CAPSULE = 0, FLOATING = 1;
+    private static volatile int chosen = -1;
+
+    static int style() {
+        int known = chosen;
+        if (known >= 0) return known;
+        SharedPreferences prefs = prefs();
+        if (prefs == null) return CAPSULE;
+        int value = prefs.getInt(KEY_STYLE, CAPSULE) == CAPSULE ? CAPSULE : FLOATING;
+        chosen = value;
+        return value;
+    }
+
+    static void setStyle(int style) {
+        style = style == CAPSULE ? CAPSULE : FLOATING;
+        chosen = style;
+        SharedPreferences prefs = prefs();
+        if (prefs != null) prefs.edit().putInt(KEY_STYLE, style).apply();
+    }
+
     private static SharedPreferences prefs() {
         Context context = Margy.context();
         if (context == null) return null;
@@ -414,6 +436,11 @@ final class NavBar {
         private final Paint words = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         private final Paint small = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         private final RectF box = new RectF(), body = new RectF();
+        /** The round button apart from the capsule, and everything the bar reaches. */
+        private final RectF fab = new RectF(), reach = new RectF();
+        private int mode = CAPSULE;
+        /** The height TikTok gave the bar, while the floating bar has made it taller. */
+        private int heightWas = Integer.MIN_VALUE;
         private final android.graphics.Rect NOTHING = new android.graphics.Rect(-2, -2, -1, -1);
         private final PathInterpolator ease = new PathInterpolator(0.2f, 0f, 0f, 1f);
         private Tab[] tabs = new Tab[0];
@@ -475,6 +502,11 @@ final class NavBar {
             boolean changed = gather(bar);
             boolean moving = false;
             boolean read = changed || now - readAt >= READ_EVERY;
+            if (style() != mode) {
+                mode = style();
+                changed = true;
+                read = true;
+            }
             if (read) {
                 readAt = now;
                 animates = Motion.enabled(bar.getContext());
@@ -632,10 +664,74 @@ final class NavBar {
                 worn = true;
                 changed = true;
             }
+            stretch(bar);
             rule(bar);
+            clear(bar);
             if (changed) arrange(bar);
             place();
             if (changed || moving) bar.invalidate();
+        }
+
+        /** What was painted behind the bar by the views around it, put away so the page shows through. */
+        private final java.util.ArrayList<View> bared = new java.util.ArrayList<>();
+        private final java.util.ArrayList<Drawable> baredWas = new java.util.ArrayList<>();
+
+        /**
+         * The floating bar lies on the page, so a plain strip the page paints under it (the bar's holder, or
+         * a view as wide as the bar lying where it does) is taken away, and given back with the bar.
+         */
+        private void clear(ViewGroup bar) {
+            if (mode != FLOATING) {
+                unclear();
+                return;
+            }
+            android.view.ViewParent parent = bar.getParent();
+            if (!(parent instanceof ViewGroup)) return;
+            ViewGroup holder = (ViewGroup) parent;
+            // the holder, and every view above it that lies no higher than the bar does
+            for (android.view.ViewParent up = holder; up instanceof ViewGroup; up = up.getParent()) {
+                ViewGroup level = (ViewGroup) up;
+                if (level.getParent() == null || level.getHeight() > 160 * unit) break;
+                take(level);
+            }
+            for (int i = 0; i < holder.getChildCount(); i++) {
+                View child = holder.getChildAt(i);
+                if (child == bar || child.getVisibility() != View.VISIBLE) continue;
+                if (child.getWidth() < bar.getWidth() * 0.9f || child.getHeight() > 130 * unit) continue;
+                if (child.getTop() < bar.getTop() - 2 * unit) continue;
+                take(child);
+            }
+            // the filler TikTok lays under the bar, over the strip the gesture line is in: a view as wide as
+            // the screen, lower than the bar's bottom, in any of the holders the bar lies in
+            int[] at = new int[2], other = new int[2];
+            bar.getLocationInWindow(at);
+            int floor = at[1] + bar.getHeight();
+            for (android.view.ViewParent up = bar.getParent(); up instanceof ViewGroup; up = up.getParent()) {
+                ViewGroup level = (ViewGroup) up;
+                for (int i = 0; i < level.getChildCount(); i++) {
+                    View child = level.getChildAt(i);
+                    if (child.getVisibility() != View.VISIBLE || child.getWidth() < bar.getWidth() * 0.9f
+                            || child.getHeight() > 64 * unit || child.getBackground() == null) continue;
+                    child.getLocationInWindow(other);
+                    if (other[1] >= floor - 2 * unit) take(child);
+                }
+            }
+        }
+
+        private void take(View view) {
+            Drawable paint = view.getBackground();
+            if (paint == null || bared.contains(view)) return;
+            bared.add(view);
+            baredWas.add(paint);
+            view.setBackground(null);
+        }
+
+        private void unclear() {
+            for (int i = 0; i < bared.size(); i++) {
+                if (bared.get(i).getBackground() == null) bared.get(i).setBackground(baredWas.get(i));
+            }
+            bared.clear();
+            baredWas.clear();
         }
 
         /** The mod's bar was switched off: TikTok's is given back as it was. */
@@ -654,7 +750,7 @@ final class NavBar {
                     if (child == bar || child.getVisibility() != View.VISIBLE) continue;
                     int height = child.getHeight();
                     if (height <= 0 || height > 3 * unit || child.getWidth() < bar.getWidth() * 0.8f) continue;
-                    if (child.getBottom() > bar.getTop() + 1 || child.getBottom() < bar.getTop() - 6 * unit) continue;
+                    if (child.getTop() > bar.getTop() + 40 * unit || child.getBottom() < bar.getTop() - 6 * unit) continue;
                     found.add(child);
                 }
             }
@@ -664,9 +760,33 @@ final class NavBar {
             rules.addAll(found);
         }
 
+        /**
+         * The floating bar is taller than TikTok's: the round button and the capsule need more than the
+         * 49dp it has. The feed lies behind the bar, not above it, so growing the bar upward moves nothing
+         * else, and the tabs, which are the bar's height, are then touched where the button is drawn.
+         */
+        private void stretch(ViewGroup bar) {
+            android.view.ViewGroup.LayoutParams params = bar.getLayoutParams();
+            if (params == null) return;
+            int want = Math.round(60f * unit);
+            if (mode == FLOATING && worn) {
+                if (params.height >= 0 && params.height != want) {
+                    if (heightWas == Integer.MIN_VALUE) heightWas = params.height;
+                    params.height = want;
+                    bar.setLayoutParams(params);
+                }
+            } else if (heightWas != Integer.MIN_VALUE) {
+                params.height = heightWas;
+                heightWas = Integer.MIN_VALUE;
+                bar.setLayoutParams(params);
+            }
+        }
+
         void leave(ViewGroup bar) {
             if (!worn) return;
             worn = false;
+            unclear();
+            stretch(bar);
             for (View old : rules) old.setAlpha(1f);
             rules.clear();
             bar.getOverlay().remove(this);
@@ -779,9 +899,14 @@ final class NavBar {
                 bottom = tall;
             }
             // the floating toolbar is 64dp tall where the bar has the room, and keeps 12dp from the sides
+            if (mode != CAPSULE) {
+                arrangeBar(top, bottom);
+                return;
+            }
             float room = Math.min(bottom - top - 6f * unit, 64f * unit);
             float middle = (top + bottom) / 2f;
             body.set(12f * unit, middle - room / 2f, wide - 12f * unit, middle + room / 2f);
+            reach.set(body.left - unit, body.top - 8f * unit, body.right + unit, body.bottom + unit);
             float inside = 4f * unit, left = body.left + inside, right = body.right - inside;
             int centre = tabs.length / 2;
             if (tabs.length % 2 == 1 && tabs[centre].kind == CREATE) {
@@ -795,6 +920,44 @@ final class NavBar {
             } else {
                 share(0, tabs.length, left, right);
             }
+        }
+
+        /**
+         * The floating bar: a capsule of the tabs and, apart from it, a large round-cornered button that
+         * makes a video. With no such button the capsule takes the width.
+         */
+        private void arrangeBar(float top, float bottom) {
+            int count = tabs.length;
+            fab.setEmpty();
+            boolean round = false;
+            for (Tab tab : tabs) if (tab.kind == CREATE) round = true;
+            float free = bottom - top - 12f * unit;
+            float height = Math.max(40f * unit, Math.min(48f * unit, free));
+            float size = round ? Math.max(height, Math.min(48f * unit, free)) : 0f;
+            float base = bottom, margin = 16f * unit;
+            float fabLeft = wide - margin - size;
+            body.set(margin, base - height, round ? fabLeft - 16f * unit : wide - margin, base);
+            if (round) fab.set(fabLeft, base - size, wide - margin, base);
+            float inner = 4f * unit;
+            int columns = count - (round ? 1 : 0);
+            float column = columns <= 0 ? 0f : (body.width() - 2f * inner) / columns;
+            int at = 0;
+            for (Tab tab : tabs) {
+                if (round && tab.kind == CREATE) {
+                    tab.left = fab.left;
+                    tab.right = fab.right;
+                } else {
+                    tab.left = body.left + inner + at * column;
+                    tab.right = tab.left + column;
+                    at++;
+                }
+            }
+            reach.set(body.left - 2f * unit, (round ? Math.min(body.top, fab.top) : body.top) - 4f * unit,
+                    (round ? fab.right : body.right) + 2f * unit, base + 4f * unit);
+        }
+
+        private void allCorners(float radius) {
+            for (int k = 0; k < radii.length; k++) radii[k] = radius;
         }
 
         /** The tabs from one to another, side by side between two places on the bar. */
@@ -815,12 +978,19 @@ final class NavBar {
 
         /** Each of TikTok's tabs goes under the place its icon is drawn, so that is where it is touched. */
         private void place() {
+            // with a round button apart from the capsule, the capsule's own last tab is the one before it
+            int last = tabs.length - 1;
+            if (mode == FLOATING && !fab.isEmpty()) while (last > 0 && tabs[last].kind == CREATE) last--;
             for (int i = 0; i < tabs.length; i++) {
                 Tab tab = tabs[i];
                 View view = tab.view;
                 if (view.getWidth() <= 0) continue;
                 // the margins of the bar belong to the tabs at its ends
                 float left = i == 0 ? 0f : tab.left, right = i == tabs.length - 1 ? wide : tab.right;
+                if (mode == FLOATING) {
+                    left = i == 0 ? body.left : tab.left;
+                    right = i == last && tab.kind != CREATE ? body.right : tab.right;
+                }
                 float shift = (left + right) / 2f - (view.getLeft() + view.getWidth() / 2f);
                 // a bar that is out of sight has its tabs off the side of the screen, where no finger is
                 if (awayTo >= 1f) shift += wide * 3f;
@@ -836,23 +1006,32 @@ final class NavBar {
         @Override
         public void draw(Canvas canvas) {
             if (tabs.length == 0 || body.isEmpty() || away >= 1f) return;
-            int veil = away > 0f ? canvas.saveLayerAlpha(body.left - unit, body.top - 8f * unit, body.right + unit,
-                    body.bottom + unit, Math.round(255f * (1f - away))) : -1;
+            int veil = away > 0f ? canvas.saveLayerAlpha(reach.left, reach.top, reach.right, reach.bottom,
+                    Math.round(255f * (1f - away))) : -1;
             int idle = shown[IDLE], pill = shown[PILL], lit = shown[LIT], quiet = shown[QUIET], primary = shown[PRIMARY];
 
             // the buttons are 48dp tall, as many as fit of the 8dp it would like round them
             float lift = Math.max(4f * unit, Math.min(8f * unit, (body.height() - 48f * unit) / 2f));
 
             float middle = body.centerY(), icon = 24f * unit, gap = 6f * unit;
+            // what the buttons lie in: the capsule bar has nothing, the floating one a capsule of its own
+            if (mode == FLOATING) {
+                fill.setColor(idle);
+                canvas.drawRoundRect(body, body.height() / 2f, body.height() / 2f, fill);
+            }
             for (int at = 0; at < tabs.length; at++) {
                 Tab tab = tabs[at];
                 int saved = -1;
                 if (tab.shown < 0.99f) {
-                    saved = canvas.saveLayerAlpha(tab.left, body.top, tab.right, body.bottom,
+                    saved = canvas.saveLayerAlpha(tab.left, reach.top, tab.right, reach.bottom,
                             Math.round(tab.shown * 255f));
                 }
                 float centre = (tab.left + tab.right) / 2f;
-                if (tab.kind == CREATE) {
+                if (tab.kind == CREATE && mode == FLOATING) {
+                    // the large button apart from the capsule
+                    allCorners(fab.width() * 0.35f);
+                    create(canvas, fab, primary, tab.pressed, fab.width() * 0.125f);
+                } else if (tab.kind == CREATE && mode == CAPSULE) {
                     // a filled button of the same group: the same height and corners as the others
                     float height = body.height() - 2f * lift;
                     corners(at, 0f, tab.pressed, height);
@@ -860,22 +1039,35 @@ final class NavBar {
                     create(canvas, box, primary, tab.pressed);
                 } else {
                     // a name too long for its tab is set a little smaller before it is cut short
-                    float badge = badge(tab);
+                    boolean names = namesShown() && mode != FLOATING;
+                    float badge = mode == FLOATING ? 0f : badge(tab);
                     float room = Math.max(0f, tab.right - tab.left - 2f * 8f * unit - icon - gap - badge);
                     float shrink = tab.name == null || tab.nameWide <= room ? 1f : Math.max(0.82f, room / tab.nameWide);
-                    float text = tab.name == null || !namesShown() ? 0f : Math.min(tab.nameWide * shrink, room);
+                    float text = tab.name == null || !names ? 0f : Math.min(tab.nameWide * shrink, room);
                     float between = text > 0f ? gap : 0f;
-                    // the indicator is as wide as its tab; with no name beside the icon it is only as wide as the icon
-                    // and what follows it, with Material 3's 16dp on either side
-                    // a connected button group: every tab is a button, 2dp from the next. The one chosen
-                    // is fully round; the others have the group's small corners, and a button that is
-                    // pressed squares off to the smallest, which is the shape morph of Material 3 Expressive
-                    float half = (tab.right - tab.left) / 2f - unit;
-                    float height = body.height() - 2f * lift;
-                    corners(at, tab.open, tab.pressed, height);
-                    box.set(centre - half, body.top + lift, centre + half, body.bottom - lift);
-                    fill.setColor(mix(idle, pill, tab.open));
-                    shape(canvas, box, fill);
+                    if (mode == CAPSULE) {
+                        // a connected button group: every tab is a button, 2dp from the next. The one chosen
+                        // is fully round; the others have the group's small corners, and a button that is
+                        // pressed squares off to the smallest, which is the shape morph of Material 3 Expressive
+                        float half = (tab.right - tab.left) / 2f - unit;
+                        float height = body.height() - 2f * lift;
+                        corners(at, tab.open, tab.pressed, height);
+                        box.set(centre - half, body.top + lift, centre + half, body.bottom - lift);
+                        fill.setColor(mix(idle, pill, tab.open));
+                        shape(canvas, box, fill);
+                    } else {
+                        // the floating bar: a round indicator behind the open tab, nothing behind the rest
+                        float high = Math.min(48f * unit, body.height() - 8f * unit);
+                        float half = Math.min((tab.right - tab.left) / 2f - 2f * unit, 32f * unit);
+                        box.set(centre - half, middle - high / 2f, centre + half, middle + high / 2f);
+                        allCorners(high / 2f);
+                        if (tab.open > 0.01f) {
+                            fill.setColor(pill);
+                            fill.setAlpha(Math.round(255f * tab.open));
+                            shape(canvas, box, fill);
+                            fill.setAlpha(255);
+                        }
+                    }
                     if (tab.pressed) {
                         // Material 3's state layer: the colour of what is on it, a tenth of it
                         fill.setColor(mix(quiet, lit, tab.open));
@@ -902,11 +1094,12 @@ final class NavBar {
                     if (tab.count != null) {
                         // on the corner of the icon while the tab is shut, and after its name once
                         // it is open, where it is not over the first letters of it
+                        float spread = mode == FLOATING ? 0f : tab.open;
                         float high = 16f * unit;
                         float shutLeft = start + icon - 9f * unit, shutUp = Math.max(body.top + unit, middle - icon / 2f - 5f * unit);
                         float openLeft = start + icon + between + text + 4f * unit, openUp = middle - high / 2f;
-                        number(canvas, tab.count, shutLeft + (openLeft - shutLeft) * tab.open,
-                                shutUp + (openUp - shutUp) * tab.open, mix(idle, pill, tab.open));
+                        number(canvas, tab.count, shutLeft + (openLeft - shutLeft) * spread,
+                                shutUp + (openUp - shutUp) * spread, mix(idle, pill, tab.open));
                     }
                     else if (tab.dot) spot(canvas, start + icon - 2f * unit, middle - icon / 2f + 3f * unit, idle);
                 }
@@ -963,6 +1156,10 @@ final class NavBar {
 
         /** The button that makes a video: a filled button of the group, in the accent, with a plus on it. */
         private void create(Canvas canvas, RectF area, int primary, boolean pressed) {
+            create(canvas, area, primary, pressed, 6.5f * unit);
+        }
+
+        private void create(Canvas canvas, RectF area, int primary, boolean pressed, float arm) {
             float centre = area.centerX(), middle = area.centerY();
             // the plus is as readable on the accent as white or near-black can make it
             int on = contrast(0xFFFFFFFF, primary) >= contrast(0xFF161823, primary) ? 0xFFFFFFFF : 0xFF161823;
@@ -974,11 +1171,11 @@ final class NavBar {
                 shape(canvas, area, fill);
                 fill.setAlpha(255);
             }
-            line.setStrokeWidth(2.4f * unit);
+            line.setStrokeWidth(arm * 0.37f);
             line.setColor(on);
             line.setStrokeCap(Paint.Cap.ROUND);
-            canvas.drawLine(centre - 6.5f * unit, middle, centre + 6.5f * unit, middle, line);
-            canvas.drawLine(centre, middle - 6.5f * unit, centre, middle + 6.5f * unit, line);
+            canvas.drawLine(centre - arm, middle, centre + arm, middle, line);
+            canvas.drawLine(centre, middle - arm, centre, middle + arm, line);
             line.setStrokeCap(Paint.Cap.BUTT);
         }
 

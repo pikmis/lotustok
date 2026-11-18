@@ -255,8 +255,12 @@ public class SettingsActivity extends Activity {
             return;
         }
         // the mark, above the name, and it can be turned
-        if (settingsGroup == 0 && searchQuery.length() == 0) column.addView(new Logo3D(this));
-        column.addView(title(settingsGroup == 0 ? (Version.LITE ? "LotusTok Lite" : "LotusTok") : groupName(settingsGroup)));
+        if (settingsGroup == 0 && searchQuery.length() == 0) {
+            // the head of the home: one card with the name, the version and the state of the updates
+            column.addView(SettingsHero.create(this, () -> Updater.check(this, true)));
+        } else {
+            column.addView(title(settingsGroup == 0 ? (Version.LITE ? "LotusTok Lite" : "LotusTok") : groupName(settingsGroup)));
+        }
         if(settingsGroup==0 || searchQuery.length()>0)column.addView(searchBox());
         if (settingsGroup != 0) column.addView(wrap(actionRow("info",Local.of("Подсказки"),null,this::showSectionHelp)));
         if (searchQuery.length() > 0) {
@@ -268,7 +272,6 @@ public class SettingsActivity extends Activity {
         if (settingsGroup == 0) {
             if (Badges.freeStillOpen() && !Mine.hasFree()) column.addView(freeBanner());
             column.addView(groupNavigation());
-            column.addView(wrap(actionRow("info",Local.of("Обучение"),null,() -> Tutorial.show(this))));
             column.addView(versions());
             showRestartBar();
             restoreScroll(0);
@@ -368,6 +371,9 @@ public class SettingsActivity extends Activity {
         column.addView(section(Text.GRADIENT));
         column.addView(wrap(gradientCard()));
 
+        column.addView(section(FRAMES));
+        column.addView(wrap(framesCard()));
+
         column.addView(section(Text.ACCOUNT));
         LinearLayout account = card();
         account.addView(idRow(Text.ACCOUNT_ID, Account.id()));
@@ -386,6 +392,8 @@ public class SettingsActivity extends Activity {
         LinearLayout mine = card();
         mine.addView(toggleRow("view_compact", Text.NEW_PROFILE, Flags.isOn(Flags.KEY_NEW_PROFILE),
                 on -> Flags.set(Flags.KEY_NEW_PROFILE, on)));
+        mine.addView(line());
+        mine.addView(toggleRow("tune", Local.of("Раскладка профиля: аватар слева, карточки, кнопки"), ProfileM3.isEnabled(), ProfileM3::setEnabled));
         mine.addView(preview("profile", DesignPreview.GRID));
         mine.addView(line());
         mine.addView(toggleRow("tune", Text.MD3_PROFILE, Md3.isOn(Md3.KEY_PROFILE), on -> Md3.set(Md3.KEY_PROFILE, on)));
@@ -630,6 +638,8 @@ public class SettingsActivity extends Activity {
         messages.addView(toggleRow("tune", Text.MD3_INBOX, Md3.isOn(Md3.KEY_INBOX), on -> Md3.set(Md3.KEY_INBOX, on)));
         messages.addView(preview("inbox", DesignPreview.INBOX));
         messages.addView(line());
+        messages.addView(toggleRow("tune", Local.of("MD3 чат"), ChatM3.isEnabled(), ChatM3::setEnabled));
+        messages.addView(line());
         messages.addView(liveToggleRow("schedule", Local.of("Время под сообщениями"), MessageTimes.enabled(),
                 on -> {
                     MessageTimes.setEnabled(on);
@@ -665,7 +675,7 @@ public class SettingsActivity extends Activity {
 
         column.addView(section(GHOST));
         LinearLayout ghost = card();
-        ghost.addView(quiet(Local.of("TikTok не узнает, что ты в сети, прочитал чат, печатаешь или смотрел историю и профиль. Чтобы скрыть «в сети», после включения перезапусти приложение.")));
+        ghost.addView(quiet(Local.of("TikTok не узнает, что ты в сети, прочитал чат, печатаешь или смотрел историю, профиль и видео. Если не отправлять просмотры видео, автор не получит +1, а рекомендации не подстроятся под то, что ты смотрел. Чтобы скрыть «в сети», после включения перезапусти приложение.")));
         ghost.addView(toggleRow("visibility_off", Local.of("Режим призрака"), Ghost.on(Ghost.KEY),
                 on -> Ghost.set(Ghost.KEY, on)));
         if (Ghost.on(Ghost.KEY)) {
@@ -674,7 +684,8 @@ public class SettingsActivity extends Activity {
                     {Ghost.READ, Local.of("Не отправлять «прочитано»")},
                     {Ghost.TYPING, Local.of("Не отправлять «печатает»")},
                     {Ghost.STORIES, Local.of("Не отмечать просмотр историй")},
-                    {Ghost.PROFILES, Local.of("Не отмечать посещение профилей")}};
+                    {Ghost.PROFILES, Local.of("Не отмечать посещение профилей")},
+                    {Ghost.VIEWS, Local.of("Не отправлять просмотры видео")}};
             for (String[] part : parts) {
                 final String key = part[0];
                 ghost.addView(line());
@@ -1127,6 +1138,66 @@ public class SettingsActivity extends Activity {
         if (needsProof(ok, trouble)) return;
         Screen.say(ok ? Text.FREE_BADGE_GOT : Text.MINE_TOO_OFTEN);
         rebuild();
+    }
+
+    /**
+     * The frames this account holds, in rows like its badges. One can be on at a time: turning one on
+     * takes the others off, and turning it off leaves none. Saved as it's switched, like the rest of
+     * these settings, and only with the account proved, like the badges.
+     */
+    private View framesCard() {
+        LinearLayout card = card();
+        final java.util.List<String> held = Frames.mine();
+        final int ground = (skin.muted() & 0xFFFFFF) | 0x33000000;
+        final Frames.Preview large = new Frames.Preview(this, ground);
+        large.set(Frames.byId(Frames.mineWorn()));
+        LinearLayout.LayoutParams tall = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190));
+        tall.topMargin = dp(12);
+        tall.bottomMargin = dp(8);
+        card.addView(large, tall);
+        card.addView(proveRow());
+        if (held.isEmpty()) {
+            card.addView(quiet(Local.of("Пока рамок нет. Рамка приходит вместе со значком: золотая за значок поддержавшего.")));
+            return card;
+        }
+        final java.util.List<M3Switch> toggles = new java.util.ArrayList<>();
+        for (final String id : held) {
+            Frames.Frame frame = Frames.byId(id);
+            if (frame == null) continue;
+            card.addView(line());
+            LinearLayout row = row();
+            row.setPadding(dp(16), dp(8), dp(16), dp(8));
+            Frames.Preview small = new Frames.Preview(this, ground);
+            small.set(frame);
+            LinearLayout.LayoutParams picture = new LinearLayout.LayoutParams(dp(60), dp(60));
+            picture.rightMargin = dp(12);
+            row.addView(small, picture);
+            LinearLayout words = new LinearLayout(this);
+            words.setOrientation(LinearLayout.VERTICAL);
+            words.addView(label(frame.title));
+            if (frame.text.length() > 0) words.addView(detail(frame.text));
+            row.addView(words, grow());
+            final M3Switch toggle = new M3Switch(this);
+            toggle.colours(Accent.colour(), skin.muted(), skin.card);
+            toggle.setChecked(id.equals(Frames.mineWorn()), false);
+            toggle.setOnChanged(checked -> {
+                if (checked) for (M3Switch other : toggles) if (other != toggle) other.setChecked(false, true);
+                String now = checked ? id : "";
+                large.set(Frames.byId(now));
+                Frames.wear(now, (ok, trouble) -> {
+                    if (needsProof(ok, trouble)) return;
+                    if (!ok) { Screen.say(Text.MINE_TOO_OFTEN); Mine.ask(this::rebuild); }
+                });
+            });
+            toggles.add(toggle);
+            LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(dp(52), dp(32));
+            size.leftMargin = dp(10);
+            row.addView(toggle, size);
+            row.setOnClickListener(v -> toggle.performClick());
+            card.addView(row);
+        }
+        card.addView(quiet(Local.of("Рамка одна: включишь другую, эта снимется. Её видят все, у кого LotusTok.")));
+        return card;
     }
 
     /**
@@ -2203,8 +2274,19 @@ public class SettingsActivity extends Activity {
 
     private void showNavSettings() {
         Panel panel = Panel.with(this, skin, Local.of("Нижняя панель"));
+        String[] looks = {
+                Local.of("Капсула"),
+                Local.of("Плавающая с кнопкой «Создать»")};
+        for (int i = 0; i < looks.length; i++) {
+            final int which = i;
+            panel.view(pickRow(looks[i], NavBar.style() == i, null, () -> {
+                NavBar.setStyle(which);
+                panel.close();
+                showNavSettings();
+            }));
+        }
         panel.view(toggleRow("label", Local.of("Название открытой вкладки"), NavBar.namesShown(), NavBar::setNamesShown));
-        panel.text(Local.of("Без названия вкладки видны одни иконки, и по ним труднее понять, куда ведёт кнопка."));
+        panel.text(Local.of("Название открытой вкладки показывает капсула. В плавающей панели видны одни иконки."));
         panel.quiet(Local.of("Закрыть"), null).show();
     }
 
@@ -2275,7 +2357,7 @@ public class SettingsActivity extends Activity {
         int[] colours=Accent.palette();final java.util.List<Dot> swatches=new java.util.ArrayList<>();
         for(int colour:colours){Dot dot=new Dot(this,colour,!Accent.isMaterial()&&colour==Accent.colour());swatches.add(dot);Motion.touch(dot);
             dot.setContentDescription(String.format(Locale.US,"#%06X",colour&0xFFFFFF));
-            dot.setOnClickListener(v->{Accent.set(colour);for(Dot swatch:swatches)swatch.choose(swatch.fill.getColor()==colour,true);if(accentCustomSwatch!=null)accentCustomSwatch.choose(false,true);markChanged();rebuildAfterSwitchAnimation();});
+            dot.setOnClickListener(v->{Accent.set(colour);for(Dot swatch:swatches)swatch.choose(swatch.fill.getColor()==colour,true);if(accentCustomSwatch!=null)accentCustomSwatch.choose(false,true);markChanged();rebuild();});
             LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(dp(48),dp(48));size.rightMargin=dp(8);strip.addView(dot,size);
         }
         int custom=Accent.custom();
@@ -2392,6 +2474,7 @@ public class SettingsActivity extends Activity {
         toggle.setOnChanged(checked -> {
             if (lead instanceof Expressive.Badge) ((Expressive.Badge) lead).set(checked, true);
             setting.set(checked);
+            if (checked) SettingsHome.turnedOn(this, title);
             if (requiresRestart) markChanged();
         });
         row.addView(toggle);
@@ -3060,7 +3143,7 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(message);
         view.setTextColor(skin.muted());
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         view.setPadding(dp(16), dp(2), dp(16), dp(8));
         return view;
     }
@@ -3552,6 +3635,10 @@ public class SettingsActivity extends Activity {
     // ---------------------------------------------------------- the parts
 
     private View backArrow() {
+        if (settingsGroup == 0) {
+            // the home: two round buttons, back and the menu, and no word beside them
+            return SettingsHome.bar(this, ProfileM3.rolesFor(skin.page), this::goBack, this::homeMenu);
+        }
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
@@ -3571,6 +3658,15 @@ public class SettingsActivity extends Activity {
         bar.setContentDescription(settingsGroup == 0 ? "TikTok" : Local.of("Настройки"));
         bar.setOnClickListener(v -> goBack());
         return bar;
+    }
+
+    /** The menu of the home: the tutorial, and the four quick switches put back as they were. */
+    private void homeMenu() {
+        new ModDialog.Builder(this).setItems(new CharSequence[] {Local.of("Обучение"), Local.of("Сбросить быстрые переключатели")},
+                (dialog, index) -> {
+                    if (index == 0) Tutorial.show(this);
+                    else { SettingsHome.reset(this); rebuild(); }
+                }).show();
     }
 
     private View title(String text) {
@@ -3595,17 +3691,18 @@ public class SettingsActivity extends Activity {
      * and the results are real shortcuts into matching setting groups.
      */
     private View searchBox() {
+        ProfileM3.Roles roles = ProfileM3.rolesFor(skin.page);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(20), dp(4), dp(8), dp(4));
+        row.setPadding(dp(20), dp(4), dp(20), dp(4));
         GradientDrawable background = new GradientDrawable();
-        background.setColor(skin.card);
+        background.setColor(roles.high);
         background.setCornerRadius(dp(28));
         row.setBackground(background);
 
         ImageView glass = new ImageView(this);
-        glass.setImageDrawable(new Expressive.Magnifier(skin.muted()));
+        glass.setImageDrawable(new Expressive.Magnifier(roles.variant));
         LinearLayout.LayoutParams glassSize = new LinearLayout.LayoutParams(dp(24), dp(24));
         glassSize.rightMargin = dp(12);
         row.addView(glass, glassSize);
@@ -3615,9 +3712,9 @@ public class SettingsActivity extends Activity {
         input.setText(searchQuery);
         input.setSelectAllOnFocus(false);
         input.setHint(Text.SEARCH_HINT);
-        input.setHintTextColor(skin.muted());
-        input.setTextColor(skin.text);
-        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        input.setHintTextColor(roles.variant);
+        input.setTextColor(roles.ink);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         input.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         input.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         input.setOnEditorActionListener((view, action, event) -> {
@@ -3627,26 +3724,39 @@ public class SettingsActivity extends Activity {
             }
             return false;
         });
-        row.addView(input, grow());
-
-        TextView go = label(searchQuery.length() == 0 ? Text.SEARCH : Text.SEARCH_CLEAR);
-        go.setTextColor(accentInk());
-        go.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        go.setGravity(Gravity.CENTER);
-        go.setPadding(dp(16), 0, dp(16), 0);
-        go.setBackground(Expressive.tile(this, accentTonal(), (Accent.colour() & 0xFFFFFF) | 0x33000000,
-                dp(20), dp(20), dp(10)));
-        go.setOnClickListener(v -> {
-            if (searchQuery.length() > 0) runSearch("");
-            else runSearch(input.getText().toString());
+        // it filters as it is typed, a moment after the last key, and the cursor stays where it was
+        input.addTextChangedListener(new android.text.TextWatcher() {
+            private final Runnable later = () -> {
+                String now = input.getText().toString().trim().toLowerCase(Locale.ROOT);
+                if (now.equals(searchQuery)) return;
+                refocusSearch = true;
+                runSearch(now);
+            };
+            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable text) {
+                input.removeCallbacks(later);
+                input.postDelayed(later, 300L);
+            }
         });
-        row.addView(go, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)));
+        if (refocusSearch) {
+            refocusSearch = false;
+            input.post(() -> {
+                input.requestFocus();
+                input.setSelection(input.getText().length());
+                android.view.inputmethod.InputMethodManager keys = (android.view.inputmethod.InputMethodManager)
+                        getSystemService(INPUT_METHOD_SERVICE);
+                if (keys != null) keys.showSoftInput(input, 0);
+            });
+        }
+        row.addView(input, grow());
         LinearLayout box = new LinearLayout(this);
-        box.setPadding(dp(12), dp(4), dp(12), dp(8));
+        box.setPadding(dp(16), dp(12), dp(16), dp(0));
         box.addView(sized(row, 56));
         return box;
     }
+
+    private boolean refocusSearch;
 
     private void runSearch(String words) {
         searchQuery = words == null ? "" : words.trim().toLowerCase(Locale.ROOT);
@@ -3793,9 +3903,9 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextColor(accentInk());
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        view.setLetterSpacing(0.04f);
+        view.setLetterSpacing(0.01f);
         view.setPadding(dp(28), dp(24), dp(16), dp(8));
         sectionTargets.put(text, view);
         return view;
@@ -3849,7 +3959,7 @@ public class SettingsActivity extends Activity {
     }
 
     private View groupNavigation() {
-        LinearLayout list = card();
+        final ProfileM3.Roles roles = ProfileM3.rolesFor(skin.page);
         String[] icons = {"palette", "group", "play_circle", "tune", "info", "extension", "chat", "flare", "favorite_border"};
         String[] notes = {Local.of("Акцент, тема, шрифты и редактор интерфейса"),
                 Local.of("Значки, градиент, аккаунт и репосты"),
@@ -3862,26 +3972,39 @@ public class SettingsActivity extends Activity {
         // Lite has the shelves that have something on them for it
         // shelf 8 (the fun one) is left out for now
         int[] shelf = Version.LITE ? new int[] {1, 3, 2, 4, 5, 9} : new int[] {1, 2, 3, 7, 4, 6, 5, 9};
+        java.util.List<SettingsHome.Section> list = new java.util.ArrayList<>();
         for (int n = 0; n < shelf.length; n++) {
-            final int i = shelf[n];
-            final int chosen = i;
-            if (n > 0) list.addView(line());
-            LinearLayout entry = row();
-            entry.setPadding(dp(16),dp(14),dp(20),dp(14));
-            entry.addView(icon(icons[i-1],false,52));
-            LinearLayout words = new LinearLayout(this); words.setOrientation(LinearLayout.VERTICAL);
-            TextView head = label(groupName(i)); head.setTextSize(19);
-            head.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
-            words.addView(head);words.addView(detail(notes[i-1]));entry.setContentDescription(groupName(i)+". "+notes[i-1]);
-            entry.addView(words,grow()); entry.addView(away());
-            entry.setMinimumHeight(dp(80));Motion.touch(entry);
-            entry.setOnClickListener(v -> {
-                if(navigating)return;navigating=true;
-                Motion.navigate(column,1f,()->{settingsGroup=chosen;page.scrollTo(0,0);rebuild();navigating=false;});
-            });
-            list.addView(entry);
+            final int chosen = shelf[n];
+            list.add(new SettingsHome.Section(icons[chosen - 1], groupName(chosen), notes[chosen - 1], () -> {
+                if (navigating) return;
+                navigating = true;
+                Motion.navigate(column, 1f, () -> { settingsGroup = chosen; page.scrollTo(0, 0); rebuild(); navigating = false; });
+            }));
         }
-        return wrap(list);
+        LinearLayout home = new LinearLayout(this);
+        home.setOrientation(LinearLayout.VERTICAL);
+        home.addView(SettingsHome.quick(this, roles, new SettingsHome.Host() {
+            @Override public void changed() { markChanged(); }
+            @Override public void choose(int place) { choosePin(place); }
+        }));
+        home.addView(SettingsHome.sections(this, roles, list));
+        home.addView(SettingsHome.foot(this, roles, () -> open(LOTUS_CHANNEL), () -> {
+            if (navigating) return;
+            navigating = true;
+            Motion.navigate(column, 1f, () -> { settingsGroup = 5; page.scrollTo(0, 0); rebuild(); navigating = false; });
+        }));
+        return home;
+    }
+
+    /** All the switches the sections have, to put one of them on this place of the quick grid. */
+    private void choosePin(final int place) {
+        final java.util.List<SettingsHome.Pin> pins = SettingsHome.pins();
+        CharSequence[] names = new CharSequence[pins.size()];
+        for (int i = 0; i < names.length; i++) names[i] = pins.get(i).title;
+        new ModDialog.Builder(this).setItems(names, (dialog, index) -> {
+            SettingsHome.pin(this, place, pins.get(index).id);
+            rebuild();
+        }).show();
     }
 
     /**
@@ -3895,7 +4018,7 @@ public class SettingsActivity extends Activity {
         if (section.equals(Text.PLUGINS)) return 6;
         if (section.equals(SUPPORT_BADGE) || section.equals(SUPPORT)) return 9;
         if (section.equals(Text.GRADIENT) || section.equals(Text.BADGES) || section.equals(Text.ACCOUNT)
-                || section.equals(MY_PROFILE)) return 2;
+                || section.equals(MY_PROFILE) || section.equals(FRAMES)) return 2;
         if (section.equals(Text.APPEARANCE) || section.equals(Text.ACCENT)
                 || section.equals(Text.THEME) || section.equals(Text.FONT)
                 || section.equals(Local.of("Редактор интерфейса"))) return 1;
@@ -3941,6 +4064,7 @@ public class SettingsActivity extends Activity {
 
     private static final String BURN = Local.of("Защита экрана");
     private static final String MY_PROFILE = Local.of("Мой профиль");
+    private static final String FRAMES = Local.of("Рамка аватарки");
     private static final String SUPPORT_BADGE = Local.of("Бейдж LotusTok");
     private static final String SUPPORT = Local.of("Поддержать проект");
     private static final String MESSAGES = Local.of("Личные сообщения");
@@ -3976,7 +4100,7 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(message);
         view.setTextColor(skin.muted());
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         view.setPadding(dp(16), dp(12), dp(16), dp(4));
         return view;
     }
@@ -4006,8 +4130,10 @@ public class SettingsActivity extends Activity {
 
     /** The accent as text on the page: lighter on dark, darker on light. */
     private int accentInk() {
-        return skin.dark() ? Expressive.mix(Accent.colour(), 0xFFFFFFFF, 0.45f)
+        int ink = skin.dark() ? Expressive.mix(Accent.colour(), 0xFFFFFFFF, 0.45f)
                 : Expressive.mix(Accent.colour(), 0xFF000000, 0.35f);
+        // and never fainter than 4.5 to 1 on the page and on a card, whatever the accent is
+        return Expressive.readable(ink, skin.page, skin.card, skin.dark() ? 0xFFFFFFFF : 0xFF000000);
     }
 
     /** The accent laid thin over the card: the tonal container of M3. */
@@ -4043,7 +4169,7 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextColor(skin.muted());
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         view.setIncludeFontPadding(false);
         return view;
     }

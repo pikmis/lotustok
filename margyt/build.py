@@ -572,7 +572,7 @@ class Build:
         entries = emoji_asset_entries(asset_root)
         entries.append(("assets/margyt/meow.ogg", os.path.join(asset_root, "meow.ogg")))
         # the anti-burn eye: two small transparent PNGs, drawn as they are
-        for eye in ("burn_eye_open.png", "burn_eye_closed.png"):
+        for eye in ("burn_eye_open.png", "burn_eye_closed.png", "hero_petals.png"):
             entries.append(("assets/margyt/" + eye, os.path.join(asset_root, eye)))
         for destination, path in entries:
             with open(path, "rb") as handle:
@@ -622,6 +622,8 @@ class Build:
     ICONS = [
         ("lotustok", "Обычная"),
         (bloom.KEY, bloom.LABEL),
+        ("dark", "Тёмная"),
+        ("cookie", "Волнистая"),
     ]
 
     ICON_PACKAGE = 0x30

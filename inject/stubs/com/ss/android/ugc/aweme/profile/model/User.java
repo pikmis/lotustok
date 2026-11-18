@@ -27,6 +27,10 @@ public class User {
         throw new UnsupportedOperationException("stub");
     }
 
+    public com.ss.android.ugc.aweme.base.model.UrlModel getAvatarThumb() {
+        throw new UnsupportedOperationException("stub");
+    }
+
     public boolean isPreventDownload() {
         throw new UnsupportedOperationException("stub");
     }

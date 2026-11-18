@@ -51,6 +51,7 @@ final class MD3Progress {
     static volatile float fingerAt;
     static volatile int fingerSeq;
     private static final int TAG_WATCHED = 0x7f5a0111;
+    private static final int TAG_LAYOUT = 0x7f5a0112;
 
     private static void watchFinger(Activity activity) {
         try {
@@ -89,6 +90,10 @@ final class MD3Progress {
         if (activity == null) return;
         watchFinger(activity);
         final View root = activity.getWindow().getDecorView();
+        // a screen comes up again and again, and a listener added each time stayed for good: after a
+        // while every layout walked the whole screen once for each time it had come up
+        if (root.getTag(TAG_LAYOUT) != null) return;
+        root.setTag(TAG_LAYOUT, Boolean.TRUE);
         root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
             public void onGlobalLayout() {

@@ -221,7 +221,7 @@ def when(stamp):
     return "%d дн назад" % (gone // 86400)
 
 
-def main_page(badges, plugins, gradients=(), said="", crashes=(), people=None):
+def _main_page(badges, plugins, gradients=(), said="", crashes=(), people=None):
     rows = []
     for badge in badges:
         rows.append(
@@ -361,6 +361,54 @@ def main_page(badges, plugins, gradients=(), said="", crashes=(), people=None):
                "".join(painted) or "<tr><td class=dim>пока пусто</td></tr>",
                "".join(packs) or "<tr><td class=dim>пока пусто</td></tr>",
                "".join(fallen) or "<tr><td class=dim>пока пусто</td></tr>"), said)
+
+
+def frames_block(frames):
+    """Frames round an avatar: most come with a badge, and any can be given by hand."""
+    rows = []
+    options = []
+    for frame in frames:
+        rows.append("<tr><td><img class=dot src='/icon/%s'></td><td><b>%s</b></td><td class=dim>#%s</td>"
+                    "<td class=dim>%s</td><td class=dim>%d по значку, %d вручную</td></tr>"
+                    % (html.escape(frame["image"]), html.escape(frame["title"]), html.escape(frame["id"]), html.escape(frame["text"]),
+                       frame["by_badge"], frame["by_hand"]))
+        options.append("<option value='%s'>%s</option>" % (html.escape(frame["id"]), html.escape(frame["title"])))
+    return """
+        <h2>Рамки аватарки</h2>
+        <p class=dim>Рамка с привязкой к значку приходит сама, вместе со значком. Любую можно выдать и вручную.</p>
+        <table>%s</table>
+        <form class=card method=post action="/admin/frame/give">
+          <p><select name=id>%s</select></p>
+          <p><textarea name=uids rows=2 placeholder="id аккаунтов через пробел"></textarea></p>
+          <p><button>Выдать</button> <button formaction="/admin/frame/take">Забрать</button></p>
+        </form>
+        <h2>Новая рамка</h2>
+        <p class=dim>PNG с прозрачной серединой: рамка рисуется квадратом поверх аватарки. Размер — во сколько раз
+           квадрат больше аватарки (у короны 1.85), сдвиг — доля аватарки вниз (минус — вверх).
+           Если id уже есть, рамка обновится.</p>
+        <form class=card method=post action="/admin/frame/new" enctype="multipart/form-data">
+          <p><input name=id placeholder="id: буквы, цифры, точка, дефис"></p>
+          <p><input type=file name=picture accept="image/png"></p>
+          <p><input name=title_ru placeholder="Название (рус)"> <input name=title placeholder="Name (en)"></p>
+          <p><textarea name=text_ru rows=2 placeholder="Описание (рус)"></textarea></p>
+          <p><textarea name=text rows=2 placeholder="Description (en)"></textarea></p>
+          <p><input name=scale value="1.5" size=5> размер
+             <input name=dy value="0" size=5> сдвиг
+             <input name=badge placeholder="значок, с которым приходит (можно пусто)"></p>
+          <p><button>Создать</button></p>
+        </form>
+    """ % ("".join(rows), "".join(options))
+
+
+def main_page(badges, plugins, gradients=(), said="", crashes=(), people=None, frames=()):
+    out = _main_page(badges, plugins, gradients, said, crashes, people)
+    mark = "<p><a class='button quiet' href=\"/admin/out\">"
+    # the page comes back as bytes
+    raw = isinstance(out, (bytes, bytearray))
+    text = out.decode("utf-8") if raw else out
+    if frames and text.count(mark) == 1:
+        text = text.replace(mark, frames_block(frames) + mark)
+    return text.encode("utf-8") if raw else text
 
 
 def badge_page(badge, wearers, said=""):

@@ -42,7 +42,12 @@ final class Skin {
 
     /** The colour of a section label or a caption on this screen. */
     int muted() {
-        return (text & 0x00FFFFFF) | 0x99000000;
+        // as faint as it can be while still reading on the page and on a card: 4.5 to 1
+        for (int alpha = 0x99; alpha < 0xFF; alpha += 0x0A) {
+            int ink = (text & 0x00FFFFFF) | (alpha << 24);
+            if (Expressive.ratio(ink, card) >= 4.5 && Expressive.ratio(ink, page) >= 4.5) return ink;
+        }
+        return text | 0xFF000000;
     }
 
     boolean dark() {

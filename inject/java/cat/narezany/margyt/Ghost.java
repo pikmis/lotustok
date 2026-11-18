@@ -10,7 +10,7 @@ public final class Ghost {
 
     static final String KEY = "ghost";
     static final String ONLINE = "ghost_online", READ = "ghost_read", TYPING = "ghost_typing",
-            STORIES = "ghost_stories", PROFILES = "ghost_profiles";
+            STORIES = "ghost_stories", PROFILES = "ghost_profiles", VIEWS = "ghost_views";
     static final String LONG_COMMENTS = "comments_long";
 
     private static GhostMode mode;

@@ -55,6 +55,7 @@ public final class Watch implements Application.ActivityLifecycleCallbacks {
             DepFloat.attach(activity);
             ChatFolders.attach(activity);
             InboxClean.attach(activity);
+            ChatM3.attach(activity);
         }
         Screamer.attach(activity);
         ViewEditor.attach(activity);

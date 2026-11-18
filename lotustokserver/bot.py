@@ -606,6 +606,37 @@ def assistant(message, chat, from_who, question):
                message["message_id"])
 
 
+def welcome(message):
+    """A join notice in the forum: take it out of General, and greet the newcomer."""
+    thread = message.get("message_thread_id")
+    if not thread or thread == 1:
+        call("deleteMessage", chat_id=FORUM, message_id=message["message_id"])
+    for who in message.get("new_chat_members") or []:
+        if who.get("is_bot"):
+            continue
+        name = html.escape(who.get("first_name") or who.get("username") or "друг")
+        text = ('Привет, <a href="tg://user?id=%d">%s</a>! Ознакомься с нашим '
+                '<a href="%s">FAQ</a>' % (who["id"], name, FAQ))
+        call("sendMessage", chat_id=FORUM, message_thread_id=WELCOME_TOPIC,
+             text=text, parse_mode="HTML", disable_web_page_preview=True)
+    return None
+
+
+def goodbye(message):
+    """A leave notice in the forum: take it out of General, and say goodbye in the welcome topic."""
+    thread = message.get("message_thread_id")
+    if not thread or thread == 1:
+        call("deleteMessage", chat_id=FORUM, message_id=message["message_id"])
+    who = message.get("left_chat_member") or {}
+    if who.get("is_bot") or not who.get("id"):
+        return None
+    name = html.escape(who.get("first_name") or who.get("username") or "друг")
+    text = ('Пока, <a href="tg://user?id=%d">%s</a>! Ждём тебя обратно' % (who["id"], name))
+    call("sendMessage", chat_id=FORUM, message_thread_id=WELCOME_TOPIC,
+         text=text, parse_mode="HTML", disable_web_page_preview=True)
+    return None
+
+
 def offered(message, chat, from_who, caption):
     """An icon somebody drew, on its way to whoever decides."""
     which = ""

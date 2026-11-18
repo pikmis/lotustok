@@ -325,6 +325,7 @@ MODEL_SOURCES: List[Tuple[str, str, str, str, str]] = [
     (USER, "getAvatarLarger", "()%s" % URL_MODEL, "(%s)%s" % (USER, URL_MODEL), AVATARS),
     (USER, "getAvatar300", "()%s" % URL_MODEL, "(%s)%s" % (USER, URL_MODEL), AVATARS),
     (USER, "getAvatarMedium", "()%s" % URL_MODEL, "(%s)%s" % (USER, URL_MODEL), AVATARS),
+    (USER, "getAvatarThumb", "()%s" % URL_MODEL, "(%s)%s" % (USER, URL_MODEL), AVATARS),
     # the typeface, wherever TikTok chooses one for itself. Most views never
     # do -- they inherit it -- and those are reached on the way text goes in,
     # which the mod is already standing in for the badges
@@ -1998,7 +1999,7 @@ def interesting(dex: bytes, literals: Optional[Dict[str, str]] = None) -> bool:
         if ("L%s;" % class_name).encode() in dex:
             return True
     if (defines(dex, PLAYER_CONFIG) or defines(dex, SETTINGS_ROWS) or defines(dex, SETTINGS_GROUP)
-            or defines(dex, STARTER)):
+            or defines(dex, STARTER) or defines(dex, IMAGE_LOADER)):
         return True
     if opens_the_menu(dex) or defines(dex, URL_DISPATCHER):
         return True
@@ -2107,9 +2108,48 @@ def dex_format(dex: bytes) -> str:
 # sites and never written in Java, shipped once.
 
 
+# ---- frames on avatars
+
+FRAMES = "Lcat/narezany/margyt/Frames;"
+IMAGE_LOADER = "Lcom/bytedance/lighten/loader/FrescoImageLoaderImpl;"
+IMAGE_DISPLAY = ".method public display(LX/1FSL;)V"
+FRAME_LABEL = "native avatar frame"
+FRAME_HOOK = "    invoke-static {p1}, %s->display(Ljava/lang/Object;)V\n" % FRAMES
+
+# A contact in the messages has its avatar on a model of its own, read through these owners.
+for owner in ("Lcom/ss/android/ugc/aweme/im/contacts/api/model/IMUser;",
+              "Lcom/ss/android/ugc/aweme/im/contacts/api/model/IMContact;",
+              "Lcom/ss/android/ugc/aweme/im/common/model/BaseContact;"):
+    MODEL_SOURCES.append((owner, ("getAvatarThumb", "contact"), "()%s" % URL_MODEL,
+                          "(Ljava/lang/Object;)%s" % URL_MODEL, FRAMES))
+
+
+def rewrite_frames(root: str, dex: Optional[bytes] = None) -> Dict[str, int]:
+    """Show the mod every picture the image loader is about to put in a view."""
+    if dex is not None and not defines(dex, IMAGE_LOADER):
+        return {}
+    path = _class_file(root, IMAGE_LOADER)
+    if not path or not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    at = text.find(IMAGE_DISPLAY)
+    if at < 0 or FRAMES in text:
+        return {}
+    registers = re.compile(r"(?m)^    \.(registers|locals) \d+\n")
+    found = registers.search(text, at)
+    if not found:
+        return {}
+    changed = text[:found.end()] + "\n" + FRAME_HOOK + text[found.end():]
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(changed)
+    return {FRAME_LABEL: 1}
+
+
 def rewrite_targets() -> List[str]:
     """Every static the rewrites point at, as `Lowner;->name(descriptor)`."""
     out = ["%s->accent()I" % ACCENT]
+    out.append("%s->display(Ljava/lang/Object;)V" % FRAMES)
     out.append("%s->setAnimation(Ljava/lang/Object;Ljava/lang/String;)V" % ACCENT)
     for name, _original, replacement in TARGETS:
         out.append("%s->%s%s" % (REGION, name, replacement))
@@ -2326,6 +2366,7 @@ def rewrite_everything(root: str, literals: Optional[Dict[str, str]] = None,
     if dex is None or draws_the_loader(dex):
         counts.update(rewrite_loading(root))
     counts.update(rewrite_cards(root))
+    counts.update(rewrite_frames(root, dex))
     return counts
 
 

@@ -436,7 +436,8 @@ final class Md3 {
 
     // ------------------------------------------------------------ the colours
 
-    private static final int SHELL = 0, CHOSEN = 1, OVER_VIDEO = 2, CHOSEN_OVER_VIDEO = 3, TONAL = 4;
+    private static final int SHELL = 0, CHOSEN = 1, OVER_VIDEO = 2, CHOSEN_OVER_VIDEO = 3, TONAL = 4,
+            CONTAINER = 5, SECONDARY = 6;
     /** Everything the mod has dressed, to be coloured again when what it lies on changes colour. */
     // The shape is held weakly: it is the view's own background, and a background keeps its view as
     // its callback. Held strongly here, every view ever dressed kept itself, its parents and its
@@ -548,6 +549,9 @@ final class Md3 {
         if (role == OVER_VIDEO) return overVideo();
         if (role == CHOSEN_OVER_VIDEO) return chosenOverVideo();
         if (role == TONAL) return tonal(view.getContext());
+        // the profile's own roles: the capsule of its tabs, and the pale container of the one that is chosen
+        if (role == CONTAINER) return ProfileM3.roles(view).container;
+        if (role == SECONDARY) return ProfileM3.roles(view).secondary;
         int ground = behind(view);
         // a surface one step up from the page: a card, a capsule, a disc
         int shell = NavBar.mix(ground, ink(ground), 0.07f);
@@ -1261,6 +1265,7 @@ final class Md3 {
                         boolean tail = i == many - 1 ? !list.canScrollVertically(1) : kind(list.getChildAt(i + 1)) != K_ROW;
                         row(child, 0, head, tail);
                     }
+                    InboxM3.frame(list);
                 }
                 ViewGroup grid = cells.get();
                 if (grid != null && grid.isAttachedToWindow() && grid.getChildCount() > 0) {
@@ -1278,7 +1283,8 @@ final class Md3 {
                     int chosen = chosenIn(strip);
                     if (chosen != tabChosen) {
                         tabChosen = chosen;
-                        pills(strip, on(PROFILE), 3f, 3f, CHOSEN);
+                        boolean expressive = ProfileM3.isEnabled();
+                        pills(strip, on(PROFILE), expressive ? 0f : 3f, expressive ? 0f : 3f, expressive ? SECONDARY : CHOSEN);
                     }
                 }
                 strip = feedTabs.get();
@@ -1407,7 +1413,7 @@ final class Md3 {
                 tabs = new WeakReference<ViewGroup>(null);
                 return;
             }
-            wear(holder, PILL).dress(holder, SHELL);
+            wear(holder, PILL).dress(holder, ProfileM3.isEnabled() ? CONTAINER : SHELL);
             if (strip.getTag(FLAT) == null) {
                 strip.setTag(FLAT, Boolean.TRUE);
                 try {
@@ -1539,7 +1545,7 @@ final class Md3 {
         @Override
         public void getOutline(View view, Outline outline) {
             float unit = view.getResources().getDisplayMetrics().density;
-            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), 12f * unit);
+            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), (ProfileM3.isEnabled() ? 16f : 12f) * unit);
         }
     };
 
@@ -1561,6 +1567,8 @@ final class Md3 {
 
     /** The three numbers of a profile, on one card. Given one of the numbers. */
     private static void stats(View number) {
+        // the profile's own layout gives each number a card of its own
+        if (ProfileM3.isEnabled()) return;
         Object stat = number.getParent();
         Object line = stat instanceof View ? ((View) stat).getParent() : null;
         if (!(line instanceof ViewGroup)) return;

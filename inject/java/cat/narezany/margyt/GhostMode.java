@@ -19,7 +19,7 @@ final class GhostMode {
  private final Map<String,AtomicInteger> blocked=new LinkedHashMap<>();
  private final Map<Object,Boolean> installed=Collections.synchronizedMap(new IdentityHashMap<>());
  private volatile boolean closed;private volatile Object activityDelegate;
- GhostMode(Flags f,Notice n){flags=f;notice=n;transport=new ImEventGate(this::enabled,this::hit,n);for(String k:new String[]{"online","stories","read","typing","profiles"})blocked.put(k,new AtomicInteger());}
+ GhostMode(Flags f,Notice n){flags=f;notice=n;transport=new ImEventGate(this::enabled,this::hit,n);for(String k:new String[]{"online","stories","read","typing","profiles","views"})blocked.put(k,new AtomicInteger());}
  boolean enabled(String channel){return !closed&&flags.on("ghost")&&flags.on("ghost_"+channel);}
  private void hit(String key){blocked.get(key).incrementAndGet();}
  private interface Work{void run()throws Exception;}
@@ -54,6 +54,7 @@ final class GhostMode {
   if(enabled("typing"))attempt("typing",()->lazy(GhostReflect.stat("X.0TL0","LIZIZ"),"com.ss.android.ugc.aweme.im.chatroom.api.typingindicator.ITypingStatusSenderTimer", "typing", "LIZ",false));
   if(enabled("profiles"))attempt("profiles",()->api("com.ss.android.ugc.profile.business.ci.viewer.api.ProfileViewerApiService","com.ss.android.ugc.profile.business.ci.viewer.api.IProfileViewerApi","profiles","reportView"));
   if(enabled("stories"))attempt("stories",()->api("com.ss.android.ugc.aweme.story.api.StoryApi","com.ss.android.ugc.aweme.story.api.IStoryApi","stories","reportStoryViewed"));
+  if(enabled("views"))attempt("views",this::views);
   if(enabled("online"))attempt("online",this::online);
   if(enabled("read"))attempt("read",this::read);
  }
@@ -82,6 +83,32 @@ final class GhostMode {
   else canceled=GhostReflect.type("X.19X3").getMethod("LJIILLIIL",Throwable.class).invoke(null,new CancellationException("LotusTok: story view not sent"));
   Object value=proxy(GhostReflect.type(face),original,(m,a)->{boolean stop=m.getName().equals(method)&&enabled(channel);if(stop)hit(channel);return stop;},m->canceled);
   patch(service,field,value);
+ }
+ /** A video's view is reported through one Retrofit service held in a static field; it is swapped for one that answers "done" and sends nothing. */
+ private void views()throws Exception{
+  Class<?> holder=GhostReflect.type("com.ss.android.ugc.aweme.feed.api.AwemeStatsApi");
+  if(installed.containsKey(holder))return;
+  Field field=GhostReflect.field(holder,"LIZIZ");Object original=field.get(null);
+  Class<?> face=GhostReflect.type("com.ss.android.ugc.aweme.feed.api.AwemeStatsApi$AwemeStatsService");
+  if(original==null||!face.isInstance(original))throw new IllegalStateException("stats service unavailable");
+  final Object done=completedFuture();
+  Object value=proxy(face,original,(m,a)->{boolean stop=enabled("views");if(stop)hit("views");return stop;},m->done);
+  patch(holder,field,value);
+ }
+ /** A future that is already finished with nothing in it: what the stats sender waits on and then ignores. */
+ private static Object completedFuture()throws Exception{
+  Class<?> type=GhostReflect.type("com.google.common.util.concurrent.ListenableFuture");
+  return Proxy.newProxyInstance(type.getClassLoader(),new Class<?>[]{type},(p,m,a)->{
+   switch(m.getName()){
+    case "isDone":return Boolean.TRUE;
+    case "isCancelled":case "cancel":return Boolean.FALSE;
+    case "addListener":if(a!=null&&a.length==2&&a[0] instanceof Runnable&&a[1] instanceof java.util.concurrent.Executor)((java.util.concurrent.Executor)a[1]).execute((Runnable)a[0]);return null;
+    case "equals":return p==a[0];
+    case "hashCode":return System.identityHashCode(p);
+    case "toString":return "LotusTok finished future";
+    default:return null;
+   }
+  });
  }
  private void online()throws Exception{
   Object service=activityDelegate!=null?activityDelegate:GhostReflect.type("X.12Qu").getMethod("LIZ").invoke(null);
