@@ -1,0 +1,75 @@
+name: Build LotusTok APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: 'Direct download URL for universal TikTok arm64-v8a APK'
+        required: true
+        type: string
+      accent_color:
+        description: 'Accent hex colour (optional, e.g. 8DD1B0)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    name: Build & Sign APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java (Temurin 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Base TikTok APK
+        run: |
+          echo "Downloading base APK..."
+          curl -fSL -A "Mozilla/5.0" -o base.apk "${{ inputs.apk_url }}"
+          ls -lh base.apk
+
+      - name: Run LotusTok Build
+        run: |
+          chmod +x build.sh
+          mkdir -p build
+          if [ -n "${{ inputs.accent_color }}" ]; then
+            ./build.sh base.apk --accent "${{ inputs.accent_color }}" -o build/lotustok.apk
+          else
+            ./build.sh base.apk -o build/lotustok.apk
+          fi
+          ls -lh build/
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lotustok-arm64
+          path: build/*.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "LotusTok Build #${{ github.run_number }}"
+          body: |
+            ### LotusTok APK Build #${{ github.run_number }}
+            - Includes Material 3 bottom navigation bars (Type A & Type B)
+            - Official Google Material Symbols Rounded icons
+            - UI lag and OnPreDraw optimizations
+            - Signed and ready for installation
+          files: build/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
