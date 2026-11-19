@@ -76,6 +76,7 @@ public final class FeedRail {
         if(view.getVisibility()!=next)view.setVisibility(next);
         Md3.rail(view,state.kind);
         FeedHide.page(view);
+        view.post(()->Md3.icons(view,state.kind));
     }
     /** The icons of the buttons on screen, looked at before each frame: a tap changes one without anything being laid out. */
     private static View[] seen=new View[0];private static int[] kinds=new int[0];private static long listed;

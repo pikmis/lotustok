@@ -200,7 +200,14 @@ final class NavBar {
 
     // ----------------------------------------------------------- finding the bar
 
-    private static final WeakHashMap<View, Capsule> BARS = new WeakHashMap<View, Capsule>();
+    static final WeakHashMap<View, Capsule> BARS = new WeakHashMap<View, Capsule>();
+
+    static View currentBar() {
+        for (View bar : BARS.keySet()) {
+            if (bar != null && bar.isAttachedToWindow() && bar.isShown()) return bar;
+        }
+        return null;
+    }
     private static WeakReference<ViewTreeObserver> watched = new WeakReference<ViewTreeObserver>(null);
     private static WeakReference<View> screen = new WeakReference<View>(null);
     private static long looked;
@@ -855,18 +862,20 @@ final class NavBar {
         private int under(View bar, long now) {
             if (now - sampledAt < LOOK_AGAIN) return ground;
             sampledAt = now;
-            return Md3.under(bar) | 0xFF000000;
+            int found = Md3.under(bar) | 0xFF000000;
+            return found == 0xFF000000 ? 0xFF161823 : found;
         }
 
         /** The colours of the capsule on the page it lies on: Material 3's roles, taken from the page and the accent. */
         private int[] palette() {
             int ink = Md3.ink(ground);
             int[] out = new int[5];
-            out[IDLE] = mode == STYLE_M3_BAR ? mix(ground, ink, 0.05f) : mix(ground, ink, 0.08f);
-            out[PILL] = mix(ground, accent | 0xFF000000, 0.34f);
-            out[LIT] = readable(mix(accent | 0xFF000000, ink, 0.40f), out[PILL], ink, 4.5f);
-            out[QUIET] = readable(mix(out[IDLE], ink, 0.80f), out[IDLE], ink, 4.5f);
-            out[PRIMARY] = accent | 0xFF000000;
+            int darkGround = (bright(ground) < 0.5f) ? (ground == Color.BLACK || ground == 0xFF000000 ? 0xFF161823 : ground) : ground;
+            out[IDLE] = (mode == STYLE_M3_BAR ? mix(darkGround, ink, 0.05f) : mix(darkGround, ink, 0.08f)) | 0xFF000000;
+            out[PILL] = mix(darkGround, accent | 0xFF000000, 0.34f) | 0xFF000000;
+            out[LIT] = readable(mix(accent | 0xFF000000, ink, 0.40f), out[PILL], ink, 4.5f) | 0xFF000000;
+            out[QUIET] = readable(mix(out[IDLE], ink, 0.80f), out[IDLE], ink, 4.5f) | 0xFF000000;
+            out[PRIMARY] = (accent | 0xFF000000);
             return out;
         }
 
@@ -925,13 +934,13 @@ final class NavBar {
         private void arrangeM3Bar(float top, float bottom) {
             int count = tabs.length;
             fab.setEmpty();
-            body.set(0f, top, wide, bottom);
+            body.set(0f, top, wide, Math.max(bottom, tall));
             float column = count <= 0 ? 0f : wide / (float) count;
             for (int i = 0; i < count; i++) {
                 tabs[i].left = i * column;
                 tabs[i].right = tabs[i].left + column;
             }
-            reach.set(0f, top - 2f * unit, wide, bottom + 2f * unit);
+            reach.set(0f, top - 2f * unit, wide, Math.max(bottom, tall) + 2f * unit);
         }
 
         /** Each of TikTok's tabs goes under the place its icon is drawn, so that is where it is touched. */
@@ -978,8 +987,12 @@ final class NavBar {
         }
 
         private void drawFloatingFab(Canvas canvas, int idle, int pill, int lit, int quiet, int primary) {
-            fill.setColor(idle);
+            fill.setColor(idle | 0xFF000000);
             canvas.drawRoundRect(body, body.height() / 2f, body.height() / 2f, fill);
+            line.setColor(mix(idle, quiet, 0.18f) | 0xFF000000);
+            line.setStrokeWidth(1f * unit);
+            line.setStyle(Paint.Style.STROKE);
+            canvas.drawRoundRect(body, body.height() / 2f, body.height() / 2f, line);
 
             float middle = body.centerY(), icon = 24f * unit;
 
@@ -997,7 +1010,7 @@ final class NavBar {
                 } else {
                     float radius = Math.min((body.height() - 8f * unit) / 2f, 20f * unit);
                     if (tab.open > 0.01f) {
-                        fill.setColor(pill);
+                        fill.setColor(pill | 0xFF000000);
                         fill.setAlpha(Math.round(255f * tab.open));
                         float r = radius * (0.6f + 0.4f * tab.open);
                         canvas.drawCircle(centre, middle, r, fill);
@@ -1024,11 +1037,12 @@ final class NavBar {
         }
 
         private void drawM3Bar(Canvas canvas, int idle, int pill, int lit, int quiet, int primary) {
-            fill.setColor(idle);
+            fill.setColor(idle | 0xFF000000);
             canvas.drawRect(body.left, body.top, body.right, body.bottom, fill);
-            line.setColor(mix(idle, quiet, 0.18f));
+            line.setColor(mix(idle, quiet, 0.16f) | 0xFF000000);
             line.setStrokeWidth(1f * unit);
             line.setStrokeCap(Paint.Cap.BUTT);
+            line.setStyle(Paint.Style.STROKE);
             canvas.drawLine(body.left, body.top, body.right, body.top, line);
 
             float icon = 24f * unit;
@@ -1061,7 +1075,7 @@ final class NavBar {
                 if (tab.open > 0.01f) {
                     float curPillW = 32f * unit + (pillFullWidth - 32f * unit) * tab.open;
                     box.set(centre - curPillW / 2f, pillTop, centre + curPillW / 2f, pillBottom);
-                    fill.setColor(pill);
+                    fill.setColor(pill | 0xFF000000);
                     fill.setAlpha(Math.round(255f * tab.open));
                     canvas.drawRoundRect(box, 16f * unit, 16f * unit, fill);
                     fill.setAlpha(255);
@@ -1170,6 +1184,10 @@ final class NavBar {
             int on = contrast(0xFFFFFFFF, primary) >= contrast(0xFF161823, primary) ? 0xFFFFFFFF : 0xFF161823;
             fill.setColor(primary);
             canvas.drawRoundRect(area, corner, corner, fill);
+            line.setStyle(Paint.Style.STROKE);
+            line.setStrokeWidth(1f * unit);
+            line.setColor(mix(primary, on, 0.16f) | 0xFF000000);
+            canvas.drawRoundRect(area, corner, corner, line);
             if (pressed) {
                 fill.setColor(on);
                 fill.setAlpha(26);

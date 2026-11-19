@@ -15,6 +15,7 @@ final class BottomChrome {
     private static ColorDrawable shield;
 
     static boolean isRail(View view) { return rail.get() == view; }
+    static View railView() { return rail.get(); }
     static boolean containsRail(View ancestor){
         View current=rail.get();for(int i=0;i<40&&current!=null;i++){
             if(current==ancestor)return true;Object parent=current.getParent();current=parent instanceof View?(View)parent:null;

@@ -209,7 +209,7 @@ public final class Account {
     private static long savedCount(String key) {
         try {
             SharedPreferences p = prefs();
-            return p == null ? -1 : p.getLong(key, -1);
+            return p == null ? -1L : p.getLong(key, -1L);
         } catch (Throwable ignored) {
             return -1;
         }

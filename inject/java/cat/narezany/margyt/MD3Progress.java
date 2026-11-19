@@ -120,8 +120,12 @@ final class MD3Progress {
                 if (!labelled(view) && view.getAlpha() != 0f) view.setAlpha(0f);
                 // in the feed the wave is on each page's thin line; elsewhere there is no thin line,
                 // and the wave goes over the seek bar
-                if (!under(view, TAB_HOST)) applyOver(view);
-                if (view.getWidth() >= view.getResources().getDisplayMetrics().widthPixels * 0.9f) applyScrub(view);
+                if (!under(view, TAB_HOST)) {
+                    applyOver(view);
+                    if (view.getWidth() >= view.getResources().getDisplayMetrics().widthPixels * 0.9f) applyScrub(view);
+                } else {
+                    Seekbar.attachSafety(view);
+                }
             }
             return;
         }
@@ -164,7 +168,7 @@ final class MD3Progress {
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             home.setClipChildren(false);
             home.addView(wavy, lp);
-            wavy.setTranslationY(-dp(bar, 5));
+            Seekbar.attachSafety(bar);
         } catch (Throwable error) {
             forget(bar);
         }
@@ -213,6 +217,7 @@ final class MD3Progress {
             wavy.setClickable(false);
             ((FrameLayout) content).addView(wavy, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            Seekbar.attachSafety(seek);
         } catch (Throwable error) {
             synchronized (scrubDone) {
                 scrubDone.remove(seek);
@@ -242,6 +247,7 @@ final class MD3Progress {
             WavyBar wavy = new WavyBar(seek.getContext(), seek, null, null);
             home.addView(wavy, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            Seekbar.attachSafety(seek);
         } catch (Throwable error) {
             forget(seek);
         }

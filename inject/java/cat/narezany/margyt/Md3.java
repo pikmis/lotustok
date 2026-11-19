@@ -73,9 +73,8 @@ final class Md3 {
         Boolean known = ON[which];
         if (known != null) return known;
         Context context = Margy.context();
-        if (context == null) return which == PROFILE || which == INBOX;  // too early to know; not remembered
-        // the profile and the inbox unless switched off; the feed and its icons only when switched on
-        boolean value = which == PROFILE || which == INBOX;
+        if (context == null) return true;
+        boolean value = true;
         try {
             value = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(KEYS[which], value);
         } catch (Throwable ignored) {
@@ -122,10 +121,10 @@ final class Md3 {
         Boolean known = PART_ON[which];
         if (known != null) return known;
         Context context = Margy.context();
-        if (context == null) return which != COLUMN;  // column off by default so action buttons sit clean & airy
-        boolean value = which != COLUMN;
+        if (context == null) return true;
+        boolean value = true;
         try {
-            value = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(PARTS[which], value);
+            value = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(PARTS[which], true);
         } catch (Throwable ignored) {
         }
         PART_ON[which] = value;
@@ -185,6 +184,12 @@ final class Md3 {
         /** The corner of that button at rest, and while it is pressed. */
         float buttonCorner, buttonPressed;
         private final Paint buttonPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        {
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setStrokeWidth(1.2f);
+            strokePaint.setColor(0x1FFFFFFF);
+        }
         /** What a disc is centred on, when that is not the view it is behind. */
         WeakReference<View> around;
         WeakReference<View> host;
@@ -298,8 +303,14 @@ final class Md3 {
                     // Material 3: while pressed, a round icon button becomes squarer
                     float corner = radius * 0.4f;
                     canvas.drawRoundRect(x - radius, y - radius, x + radius, y + radius, corner, corner, paint);
+                    if (role == OVER_VIDEO || role == CHOSEN_OVER_VIDEO) {
+                        canvas.drawRoundRect(x - radius, y - radius, x + radius, y + radius, corner, corner, strokePaint);
+                    }
                 } else {
                     canvas.drawCircle(x, y, radius, paint);
+                    if (role == OVER_VIDEO || role == CHOSEN_OVER_VIDEO) {
+                        canvas.drawCircle(x, y, radius - 0.6f, strokePaint);
+                    }
                 }
             } else if (kind == CARD && (foot >= 0f && foot != radius || morph > 0f || button > 0f)) {
                 // Material 3: what is on is a circle; the corners run from the group's to full, with a smooth step
@@ -313,6 +324,9 @@ final class Md3 {
                 edge.rewind();
                 edge.addRoundRect(box, corners, android.graphics.Path.Direction.CW);
                 canvas.drawPath(edge, paint);
+                if (role == OVER_VIDEO || role == CHOSEN_OVER_VIDEO) {
+                    canvas.drawPath(edge, strokePaint);
+                }
                 if (button > 0f && pressed) {
                     // Material 3's pressed state: a layer of the content's colour, over the section and cut to its shape
                     buttonPaint.setColor(0x24FFFFFF);
@@ -321,6 +335,9 @@ final class Md3 {
             } else {
                 float round = kind == PILL ? box.height() / 2f : radius;
                 canvas.drawRoundRect(box, round, round, paint);
+                if (role == OVER_VIDEO || role == CHOSEN_OVER_VIDEO) {
+                    canvas.drawRoundRect(box, round, round, strokePaint);
+                }
             }
             if (kind == CARD && button > 0f && squares) drawButton(canvas);
         }
@@ -606,14 +623,14 @@ final class Md3 {
         return NavBar.mix(0xFF1D1B20, Accent.colour() | 0xFF000000, 0.25f) | 0xFF000000;
     }
 
-    /** A disc over a video: dark whatever the theme, and mostly there. */
+    /** An element over video: opaque matte dark theme color (surface container). */
     private static int overVideo() {
-        return (NavBar.mix(0xFF17161B, Accent.colour() | 0xFF000000, 0.10f) & 0x00FFFFFF) | 0x99000000;
+        return 0xFF161823;
     }
 
     /** The chosen one of a group that lies over a video. */
     private static int chosenOverVideo() {
-        return (NavBar.mix(0xFF17161B, Accent.colour() | 0xFF000000, 0.45f) & 0x00FFFFFF) | 0xE6000000;
+        return 0xFF000000 | NavBar.mix(0xFF161823, Accent.colour() | 0xFF000000, 0.35f);
     }
 
     // ---------------------------------------------------- the feed's buttons
@@ -753,11 +770,11 @@ final class Md3 {
         card.host = new WeakReference<View>(host);
         card.pad = 8f * unit;
         // the progress line runs just under the caption: the card stops short of it
-        card.padBottom = 3f * unit;
+        card.padBottom = 4f * unit;
         // what stands on top of a caption (who reposted, the friends who liked it) is not covered by its card
-        card.padTop = 3f * unit;
-        card.radius = 20f * unit;
-        card.stop = 92f * unit;
+        card.padTop = 4f * unit;
+        card.radius = 16f * unit;
+        card.stop = 80f * unit;
         if (!card.dressed || card.role != OVER_VIDEO) card.dress(host, OVER_VIDEO);
     }
 
@@ -846,11 +863,41 @@ final class Md3 {
             icons(slot, which);
             boolean feed = on(FEED);
             companions(slot, feed);
-            strip(slot);
-            flatten(slot, false, true);
-            boolean moved = part(SHIFT);
-            slot.setTranslationX(moved ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
-            if (moved) unclip(slot);
+            if (!part(COLUMN)) {
+                strip(slot);
+                flatten(slot, false, true);
+                boolean moved = part(SHIFT);
+                slot.setTranslationX(moved ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
+                if (moved) unclip(slot);
+                return;
+            }
+            flatten(slot, true, true);
+            Object holder = slot.getParent();
+            for (int i = 0; i < 3 && holder instanceof ViewGroup; i++) {
+                ((ViewGroup) holder).setClipChildren(false);
+                ((ViewGroup) holder).setClipToPadding(false);
+                holder = ((ViewGroup) holder).getParent();
+            }
+            slot.setTranslationX(part(SHIFT) ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
+            boolean first = true, last = true;
+            for (int i = 0; i < which; i++) if (FeedRail.shown(i)) first = false;
+            for (int i = which + 1; i < FeedRail.KEYS.length; i++) if (FeedRail.shown(i)) last = false;
+            float unit = slot.getResources().getDisplayMetrics().density;
+            View picture = pictureOf(slot, 0);
+            Shape pod = wear(slot, CARD, false);
+            pod.right = 4f * unit;
+            pod.wide = 48f * unit;
+            pod.top = 0f;
+            pod.head = 2f * unit;
+            pod.gap = 2f * unit;
+            pod.reach = last ? 4f * unit : 0f;
+            pod.bottom = last ? 4f * unit : 0f;
+            pod.ends(first ? 20f * unit : 8f * unit, last ? 20f * unit : 8f * unit);
+            pod.around = picture == null ? null : new WeakReference<View>(picture);
+            pod.host = new WeakReference<View>(slot);
+            pod.button = 0f;
+            pod.squares = false;
+            pod.dress(slot, OVER_VIDEO);
         } catch (Throwable error) {
             Diary.detail("md3: rail: " + error);
         }
@@ -938,48 +985,17 @@ final class Md3 {
      * heart swaps the holder for another.
      */
     private static void icon(View view, int which, int depth) {
-        if (view == null || depth > 5 || which < 0 || which >= GLYPHS.length) return;
+        if (view == null || depth > 5 || which < 0) return;
         if (view instanceof android.widget.ImageView) {
-            android.widget.ImageView image = (android.widget.ImageView) view;
-            Drawable shown = image.getDrawable();
-            if (shown == null || shown == view.getTag(PICTURE)) return;
-            view.setTag(PICTURE, shown);
-            if (!shown.getClass().getName().equals(TUX_ICON)) return;
-            try {
-                if (!tuxAsked) {
-                    tuxAsked = true;
-                    java.lang.reflect.Field first = null;
-                    for (java.lang.reflect.Field field : shown.getClass().getDeclaredFields()) {
-                        if (field.getType() != Drawable.class || java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
-                        if (first == null || field.getName().compareTo(first.getName()) < 0) first = field;
-                    }
-                    if (first != null) first.setAccessible(true);
-                    tuxPicture = first;
+            boolean on = on(ICONS);
+            if (on) {
+                MaterialSymbols.inject((android.widget.ImageView) view, which);
+            } else {
+                Drawable shown = ((android.widget.ImageView) view).getDrawable();
+                if (shown instanceof MaterialSymbols.SymbolDrawable) {
+                    Drawable before = ((MaterialSymbols.SymbolDrawable) shown).getDelegate();
+                    if (before != null) ((android.widget.ImageView) view).setImageDrawable(before);
                 }
-                if (tuxPicture == null) return;
-                Object inside = tuxPicture.get(shown);
-                boolean on = on(ICONS);
-                if (on && inside instanceof Drawable && !(inside instanceof Glyph)) {
-                    synchronized (HELD) {
-                        HELD.put(shown, (Drawable) inside);
-                    }
-                    Glyph ours = new Glyph(which);
-                    ours.setBounds(((Drawable) inside).getBounds());
-                    tuxPicture.set(shown, ours);
-                    shown.invalidateSelf();
-                } else if (!on && inside instanceof Glyph) {
-                    Drawable before;
-                    synchronized (HELD) {
-                        before = HELD.remove(shown);
-                    }
-                    if (before != null) {
-                        tuxPicture.set(shown, before);
-                        shown.invalidateSelf();
-                    }
-                }
-            } catch (Throwable error) {
-                Diary.detail("md3: icon: " + error);
-                tuxPicture = null;
             }
             return;
         }
@@ -1040,7 +1056,12 @@ final class Md3 {
     static void icons(View slot, int which) {
         try {
             if (slot != null && slot.getVisibility() == View.VISIBLE) {
-                icon(slot, which, 0);
+                View pic = pictureOf(slot, 0);
+                if (pic instanceof android.widget.ImageView) {
+                    icon(pic, which, 0);
+                } else {
+                    icon(slot, which, 0);
+                }
                 // TikTok sets its own background on a button while it is pressed: the section goes back behind it
                 Object put = slot.getTag(PUT);
                 if (put instanceof Drawable && slot.getBackground() != put) slot.setBackground((Drawable) put);
@@ -1261,8 +1282,15 @@ final class Md3 {
             feedTabs();
         }
 
+        private long lastIconSweep;
+
         @Override
         public boolean onPreDraw() {
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now - lastIconSweep > 100L) {
+                lastIconSweep = now;
+                FeedRail.icons();
+            }
             if (!dirty) return true;
             dirty = false;
             long whole = Probe.start();
@@ -1391,7 +1419,8 @@ final class Md3 {
             }
             float unit = row.getResources().getDisplayMetrics().density;
             Shape capsule = wear(window, PILL);
-            capsule.top = capsule.bottom = 9f * unit;
+            capsule.top = capsule.bottom = 6f * unit;
+            capsule.left = capsule.right = 6f * unit;
             capsule.dress(window, OVER_VIDEO);
             if (feedTabs.get() != strip) {
                 feedTabs = new WeakReference<ViewGroup>(strip);

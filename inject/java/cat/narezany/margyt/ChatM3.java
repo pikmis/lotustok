@@ -47,11 +47,12 @@ final class ChatM3 {
     static final String KEY = "chat_m3";
     private static final int BAR = 0x7e0c0340, SKIN = 0x7e0c0341, CARD = 0x7e0c0342, DONE = 0x7e0c0343,
             HOLD = 0x7e0c0344, WATCH = 0x7e0c0345;
+    static final int SENDER = 0x7e0c0346, INCOMING = 0x7e0c0347;
 
     static boolean isEnabled() {
         if (Version.LITE) return false;
         SharedPreferences prefs = prefs();
-        return prefs != null && prefs.getBoolean(KEY, false);
+        return prefs == null || prefs.getBoolean(KEY, true);
     }
 
     static void setEnabled(boolean on) {
@@ -357,6 +358,7 @@ final class ChatM3 {
         try { hint(chat, r, unit); } catch (Throwable error) { Diary.detail("chat m3: hint: " + error); }
         try { chips(chat, r, unit); } catch (Throwable error) { Diary.detail("chat m3: chips: " + error); }
         try { input(chat, r, unit); } catch (Throwable error) { Diary.detail("chat m3: input: " + error); }
+        try { messages(chat, r, unit); } catch (Throwable error) { Diary.detail("chat m3: messages: " + error); }
     }
 
     // ------------------------------------------------------------------ the bar at the top
@@ -816,6 +818,7 @@ final class ChatM3 {
                             // the microphone's shape follows the words: the next apply sets it, and this moves it now
                             Object morph = typed.getTag(DONE);
                             if (morph instanceof Morph) ((Morph) morph).to(s.length() > 0 ? 1f : 0f);
+                            try { input(chat, r, unit); } catch (Throwable ignored) {}
                         }
                     });
                 }
@@ -868,6 +871,23 @@ final class ChatM3 {
             }
         }
 
+        // the send button: solid primary Monet color and onPrimary tint, 48dp circle
+        for (int i = 0; i < zone.getChildCount(); i++) {
+            View child = zone.getChildAt(i);
+            if (child == null || child == cameraBox || child == camera || child == field || child == mic) continue;
+            size(child, dp(unit, 48f), dp(unit, 48f));
+            margins(child, dp(unit, 8f), 0, 0, 0);
+            dress(child, r.primary, pressed(r.onPrimary, fill(r.primary, corners(unit, 24f, 24f, 24f, 24f))));
+            if (child instanceof ViewGroup) {
+                ViewGroup vg = (ViewGroup) child;
+                for (int j = 0; j < vg.getChildCount(); j++) {
+                    View inner = vg.getChildAt(j);
+                    if (!(inner instanceof ImageView)) inner.setBackground(null);
+                }
+            }
+            tintAll(child, r.onPrimary, unit);
+        }
+
         // TikTok's own buttons of the row (the stickers, the plus, the send) are cut down to the same
         // 48dp: the whole row is one height then, and does not push into the messages above it
         shrink(zone, dp(unit, 48f), 0, cameraBox, camera, field, mic);
@@ -912,6 +932,206 @@ final class ChatM3 {
         if (view instanceof ViewGroup) {
             ViewGroup g = (ViewGroup) view;
             for (int i = 0; i < g.getChildCount(); i++) tintAll(g.getChildAt(i), colour, unit);
+        }
+    }
+
+    // ------------------------------------------------------------------ message bubbles & MD3 grouping
+
+    static final class BubbleSlot {
+        final View row;
+        final View bubble;
+        final boolean incoming;
+        final long sender;
+
+        BubbleSlot(View row, View bubble, boolean incoming, long sender) {
+            this.row = row;
+            this.bubble = bubble;
+            this.incoming = incoming;
+            this.sender = sender;
+        }
+    }
+
+    private static void messages(View chat, ProfileM3.Roles r, float unit) {
+        ViewGroup list = findMessageList(chat);
+        if (list == null || list.getChildCount() == 0) return;
+        styleGroupedBubbles(list, r, unit);
+    }
+
+    private static ViewGroup findMessageList(View chat) {
+        if (!(chat instanceof ViewGroup)) return null;
+        ViewGroup rv = findRecyclerView((ViewGroup) chat, 0);
+        if (rv != null) return rv;
+        return findListFallback((ViewGroup) chat, 0);
+    }
+
+    private static ViewGroup findRecyclerView(ViewGroup parent, int depth) {
+        if (depth > 8) return null;
+        if (parent.getClass().getName().contains("RecyclerView")) return parent;
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (child instanceof ViewGroup) {
+                if (child.getClass().getName().contains("RecyclerView")) return (ViewGroup) child;
+                ViewGroup found = findRecyclerView((ViewGroup) child, depth + 1);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static ViewGroup findListFallback(ViewGroup parent, int depth) {
+        if (depth > 6) return null;
+        int withBubbles = 0;
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (child instanceof ViewGroup && findBubble(child) != null) withBubbles++;
+        }
+        if (withBubbles >= 2) return parent;
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            View child = parent.getChildAt(i);
+            if (child instanceof ViewGroup) {
+                ViewGroup found = findListFallback((ViewGroup) child, depth + 1);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    static View findBubble(View root) {
+        if (!(root instanceof ViewGroup)) return null;
+        View node = root;
+        View candidate = null;
+        for (int depth = 0; depth < 5 && node instanceof ViewGroup; depth++) {
+            ViewGroup g = (ViewGroup) node;
+            View best = null;
+            int maxArea = 0;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                View child = g.getChildAt(i);
+                if (child == null || child.getVisibility() != View.VISIBLE) continue;
+                if (Integer.valueOf(MessageTimes.TAG).equals(child.getTag(MessageTimes.TAG))) continue;
+                if (child instanceof TextView && child.getTag(MessageTimes.TAG) != null) continue;
+                int w = child.getWidth(), h = child.getHeight();
+                if (w > 0 && w == h && w <= 160 && child.getLeft() < 60 && g.getChildCount() > 1) {
+                    continue;
+                }
+                int area = w * h;
+                if (area > maxArea) {
+                    maxArea = area;
+                    best = child;
+                }
+            }
+            if (best == null) break;
+            if (best.getBackground() != null && best != root) {
+                candidate = best;
+            }
+            node = best;
+        }
+        return candidate != null ? candidate : (node != root && !(node instanceof TextView && node.getTag(MessageTimes.TAG) != null) ? node : null);
+    }
+
+    static void styleGroupedBubbles(ViewGroup list, ProfileM3.Roles r, float unit) {
+        java.util.List<BubbleSlot> slots = new java.util.ArrayList<BubbleSlot>();
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View child = list.getChildAt(i);
+            if (child == null || child.getVisibility() != View.VISIBLE) continue;
+            View bubble = findBubble(child);
+            if (bubble == null) continue;
+
+            boolean incoming;
+            Object incTag = child.getTag(INCOMING);
+            if (incTag instanceof Boolean) {
+                incoming = (Boolean) incTag;
+            } else {
+                int rowWidth = child.getWidth();
+                if (rowWidth <= 0) rowWidth = list.getWidth();
+                int bubbleCenter = bubble.getLeft() + bubble.getWidth() / 2;
+                incoming = bubbleCenter < rowWidth / 2;
+            }
+
+            long sender;
+            Object sTag = child.getTag(SENDER);
+            if (sTag instanceof Long) {
+                sender = (Long) sTag;
+            } else {
+                sender = incoming ? 1L : -1L;
+            }
+
+            slots.add(new BubbleSlot(child, bubble, incoming, sender));
+        }
+
+        if (slots.isEmpty()) return;
+
+        java.util.Collections.sort(slots, new java.util.Comparator<BubbleSlot>() {
+            @Override
+            public int compare(BubbleSlot a, BubbleSlot b) {
+                return Integer.compare(a.row.getTop(), b.row.getTop());
+            }
+        });
+
+        int outColor = r.tertiaryContainer != 0 ? r.tertiaryContainer : r.primaryContainer;
+        int inColor = r.high != 0 ? r.high : r.container;
+
+        for (int i = 0; i < slots.size(); i++) {
+            BubbleSlot curr = slots.get(i);
+            boolean hasPrev = (i > 0) && sameGroup(curr, slots.get(i - 1));
+            boolean hasNext = (i < slots.size() - 1) && sameGroup(curr, slots.get(i + 1));
+
+            float tl, tr, br, bl;
+            if (curr.incoming) {
+                tl = hasPrev ? 4f : 18f;
+                tr = 18f;
+                br = 18f;
+                bl = hasNext ? 4f : 18f;
+            } else {
+                tl = 18f;
+                tr = hasPrev ? 4f : 18f;
+                br = hasNext ? 4f : 18f;
+                bl = 18f;
+            }
+
+            int color = curr.incoming ? inColor : outColor;
+            float[] radii = corners(unit, tl, tr, br, bl);
+            int cornerKey = ((int) tl) | (((int) tr) << 6) | (((int) br) << 12) | (((int) bl) << 18);
+            int key = color ^ cornerKey;
+
+            dress(curr.bubble, key, fill(color, radii));
+            tintTexts(curr.bubble, r.ink);
+        }
+    }
+
+    private static boolean sameGroup(BubbleSlot a, BubbleSlot b) {
+        if (a.incoming != b.incoming) return false;
+        if (a.sender != 0 && b.sender != 0 && a.sender != b.sender) return false;
+        return true;
+    }
+
+    static void onBindMessage(ViewGroup root, boolean incoming, long sender) {
+        if (!isEnabled()) return;
+        root.setTag(INCOMING, Boolean.valueOf(incoming));
+        root.setTag(SENDER, Long.valueOf(sender));
+        try {
+            float unit = root.getResources().getDisplayMetrics().density;
+            ProfileM3.Roles r = ProfileM3.roles(root);
+            View bubble = findBubble(root);
+            if (bubble != null) {
+                int color = incoming ? (r.high != 0 ? r.high : r.container)
+                        : (r.tertiaryContainer != 0 ? r.tertiaryContainer : r.primaryContainer);
+                float[] radii = corners(unit, 18f, 18f, 18f, 18f);
+                int key = color ^ (18 | (18 << 6) | (18 << 12) | (18 << 18));
+                dress(bubble, key, fill(color, radii));
+                tintTexts(bubble, r.ink);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private static void tintTexts(View view, int colour) {
+        if (view instanceof TextView) {
+            TextView tv = (TextView) view;
+            if (Integer.valueOf(MessageTimes.TAG).equals(tv.getTag(MessageTimes.TAG))) return;
+            if (tv.getTag(MessageTimes.TAG) != null) return;
+            if (tv.getCurrentTextColor() != colour) tv.setTextColor(colour);
+        } else if (view instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) tintTexts(vg.getChildAt(i), colour);
         }
     }
 }

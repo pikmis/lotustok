@@ -3159,7 +3159,7 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(message);
         view.setTextColor(skin.muted());
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         view.setPadding(dp(16), dp(2), dp(16), dp(8));
         return view;
     }
@@ -3689,9 +3689,9 @@ public class SettingsActivity extends Activity {
         final TextView view = new TextView(this);
         view.setText(text);
         view.setTextColor(skin.text);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, settingsGroup == 0 ? 44 : 34);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, settingsGroup == 0 ? 28 : 22);
         view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        view.setPadding(dp(28), dp(8), dp(24), dp(16));
+        view.setPadding(dp(20), dp(12), dp(20), dp(12));
         if (settingsGroup == 0) view.setGravity(Gravity.CENTER_HORIZONTAL);
         // The cat that meowed after five taps on a title is switched off for now.
         view.setOnClickListener(v -> {
@@ -3919,10 +3919,10 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextColor(accentInk());
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        view.setLetterSpacing(0.01f);
-        view.setPadding(dp(28), dp(24), dp(16), dp(8));
+        view.setLetterSpacing(0.03f);
+        view.setPadding(dp(20), dp(16), dp(16), dp(6));
         sectionTargets.put(text, view);
         return view;
     }
@@ -4133,7 +4133,7 @@ public class SettingsActivity extends Activity {
     private View wrap(View card) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(12), 0, dp(12), dp(6));
+        box.setPadding(dp(16), 0, dp(16), dp(4));
         if (!(card instanceof Expressive.Group)) {
             LinearLayout single = card();
             single.addView(card);
@@ -4166,8 +4166,8 @@ public class SettingsActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(16), dp(4), dp(20), dp(4));
-        row.setMinimumHeight(dp(56));
+        row.setPadding(dp(16), dp(4), dp(16), dp(4));
+        row.setMinimumHeight(dp(48));
         Motion.press(row);
         return row;
     }
@@ -4176,7 +4176,7 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextColor(skin.text);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         view.setIncludeFontPadding(false);view.setPadding(0,0,dp(12),0);
         return view;
     }

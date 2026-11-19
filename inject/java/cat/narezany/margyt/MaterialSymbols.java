@@ -1,13 +1,19 @@
 package cat.narezany.margyt;
 
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.os.SystemClock;
+import android.view.View;
+import android.widget.ImageView;
 
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -126,5 +132,257 @@ public final class MaterialSymbols {
             @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); }
             @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
         };
+    }
+
+    /**
+     * Robust SymbolDrawable that wraps the host ImageView's existing drawable and renders
+     * Google Material Symbols Rounded vectors seamlessly over video.
+     */
+    public static final class SymbolDrawable extends Drawable implements Drawable.Callback {
+        private final WeakReference<ImageView> host;
+        private final Drawable delegate;
+        private final int which;
+        private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private boolean isVivid;
+        private int vividColor;
+        private long lastSampled;
+
+        private static Bitmap sampleBitmap;
+        private static Canvas sampleCanvas;
+
+        public SymbolDrawable(ImageView host, Drawable delegate, int which) {
+            this.host = new WeakReference<ImageView>(host);
+            this.delegate = delegate;
+            this.which = which;
+            if (delegate != null) {
+                delegate.setCallback(this);
+                Rect b = delegate.getBounds();
+                if (b != null && !b.isEmpty()) setBounds(b);
+            }
+            fillPaint.setStyle(Paint.Style.FILL);
+            fillPaint.setColor(0xFFFFFFFF);
+            sample();
+        }
+
+        public Drawable getDelegate() {
+            return delegate;
+        }
+
+        public void update() {
+            sample();
+            invalidateSelf();
+        }
+
+        private void sample() {
+            long now = SystemClock.uptimeMillis();
+            if (now - lastSampled < 100L) return;
+            lastSampled = now;
+
+            ImageView img = host.get();
+            if (img != null && (img.isSelected() || img.isActivated())) {
+                isVivid = true;
+                vividColor = which == 0 ? (Accent.isDefault() ? 0xFFFE2C55 : Accent.accent()) : 0xFFFFAC33;
+                return;
+            }
+
+            if (delegate == null) {
+                isVivid = false;
+                return;
+            }
+
+            Rect b = delegate.getBounds();
+            if ((b == null || b.isEmpty()) && img != null && img.getWidth() > 0) {
+                delegate.setBounds(0, 0, img.getWidth(), img.getHeight());
+                b = delegate.getBounds();
+            }
+            if (b == null || b.isEmpty()) return;
+
+            try {
+                if (sampleBitmap == null) {
+                    sampleBitmap = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888);
+                    sampleCanvas = new Canvas(sampleBitmap);
+                }
+                sampleBitmap.eraseColor(0);
+                int saved = sampleCanvas.save();
+                sampleCanvas.scale(16f / b.width(), 16f / b.height());
+                sampleCanvas.translate(-b.left, -b.top);
+                delegate.draw(sampleCanvas);
+                sampleCanvas.restoreToCount(saved);
+
+                for (int y = 0; y < 16; y += 2) {
+                    for (int x = 0; x < 16; x += 2) {
+                        int pixel = sampleBitmap.getPixel(x, y);
+                        if (Color.alpha(pixel) < 120) continue;
+                        int r = Color.red(pixel), g = Color.green(pixel), bl = Color.blue(pixel);
+                        int high = Math.max(r, Math.max(g, bl));
+                        int low = Math.min(r, Math.min(g, bl));
+                        if (high - low > 50) {
+                            isVivid = true;
+                            if (which == 0) {
+                                vividColor = Accent.isDefault() ? pixel : Accent.accent();
+                            } else {
+                                vividColor = pixel;
+                            }
+                            return;
+                        }
+                    }
+                }
+                isVivid = false;
+            } catch (Throwable ignored) {
+            }
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect box = getBounds();
+            if (box == null || box.isEmpty()) {
+                ImageView img = host.get();
+                if (img != null && img.getWidth() > 0) {
+                    setBounds(0, 0, img.getWidth(), img.getHeight());
+                    box = getBounds();
+                } else {
+                    return;
+                }
+            }
+            sample();
+
+            int color = isVivid ? vividColor : 0xFFFFFFFF;
+            fillPaint.setColor(color);
+
+            float density = 2f;
+            ImageView img = host.get();
+            if (img != null && img.getResources() != null) {
+                density = img.getResources().getDisplayMetrics().density;
+            }
+            fillPaint.setShadowLayer(2.5f * density, 0f, 1f * density, 0x88000000);
+
+            int saved = canvas.save();
+            float grown = 1.12f;
+            float side = Math.min(box.width(), box.height()) * grown;
+            canvas.translate(box.exactCenterX() - side / 2f, box.exactCenterY() - side / 2f);
+
+            // Mirror share arrow horizontally
+            if (which == 3) {
+                canvas.scale(-1f, 1f, side / 2f, 0f);
+            }
+            canvas.scale(side / 960f, side / 960f);
+            canvas.translate(0f, 960f);
+
+            Path p = null;
+            if (which == 0) {
+                p = path(isVivid ? LIKE_ON : LIKE_OFF);
+            } else if (which == 1) {
+                p = path(COMMENT_ON);
+            } else if (which == 2) {
+                p = path(isVivid ? FAVORITE_ON : FAVORITE_OFF);
+            } else if (which == 3) {
+                p = path(SHARE_ARROW);
+            } else if (which == 4) {
+                p = path(MUSIC_DISC);
+            } else if (which == 5) {
+                p = path(FOLLOW_PLUS);
+            }
+
+            if (p != null) {
+                canvas.drawPath(p, fillPaint);
+            }
+            canvas.restoreToCount(saved);
+        }
+
+        @Override
+        public int getIntrinsicWidth() {
+            if (delegate != null && delegate.getIntrinsicWidth() > 0) return delegate.getIntrinsicWidth();
+            ImageView img = host.get();
+            if (img != null && img.getResources() != null) {
+                return (int) (36f * img.getResources().getDisplayMetrics().density);
+            }
+            return 72;
+        }
+
+        @Override
+        public int getIntrinsicHeight() {
+            if (delegate != null && delegate.getIntrinsicHeight() > 0) return delegate.getIntrinsicHeight();
+            ImageView img = host.get();
+            if (img != null && img.getResources() != null) {
+                return (int) (36f * img.getResources().getDisplayMetrics().density);
+            }
+            return 72;
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            fillPaint.setAlpha(alpha);
+            if (delegate != null) delegate.setAlpha(alpha);
+            invalidateSelf();
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+            fillPaint.setColorFilter(colorFilter);
+            if (delegate != null) delegate.setColorFilter(colorFilter);
+            invalidateSelf();
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+
+        @Override
+        protected void onBoundsChange(Rect bounds) {
+            super.onBoundsChange(bounds);
+            if (delegate != null) delegate.setBounds(bounds);
+        }
+
+        @Override
+        public void invalidateDrawable(Drawable who) {
+            invalidateSelf();
+        }
+
+        @Override
+        public void scheduleDrawable(Drawable who, Runnable what, long when) {
+            scheduleSelf(what, when);
+        }
+
+        @Override
+        public void unscheduleDrawable(Drawable who, Runnable what) {
+            unscheduleSelf(what);
+        }
+    }
+
+    /**
+     * Directly inject Material Symbols Rounded into an action ImageView.
+     */
+    public static boolean inject(final ImageView image, final int which) {
+        if (image == null || which < 0) return false;
+        Drawable current = image.getDrawable();
+        if (current instanceof SymbolDrawable) {
+            ((SymbolDrawable) current).update();
+            return true;
+        }
+        if (current == null) {
+            image.post(new Runnable() {
+                @Override
+                public void run() {
+                    Drawable d = image.getDrawable();
+                    if (d != null && !(d instanceof SymbolDrawable)) {
+                        image.setImageDrawable(new SymbolDrawable(image, d, which));
+                    }
+                }
+            });
+            return false;
+        }
+        SymbolDrawable symbol = new SymbolDrawable(image, current, which);
+        image.setImageDrawable(symbol);
+        image.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                Drawable d = image.getDrawable();
+                if (d != null && !(d instanceof SymbolDrawable)) {
+                    image.setImageDrawable(new SymbolDrawable(image, d, which));
+                }
+            }
+        });
+        return true;
     }
 }
