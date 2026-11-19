@@ -16,7 +16,8 @@ class FeedRailTest(unittest.TestCase):
    'cat/narezany/margyt/AccountAppearance.java':'package cat.narezany.margyt;class AccountAppearance{static String uid="111";static android.content.SharedPreferences prefs(android.content.Context c){return c.getSharedPreferences(uid,0);}}',
    'cat/narezany/margyt/Diary.java':'package cat.narezany.margyt;class Diary{static void note(String s){}}',
    'android/os/SystemClock.java':'package android.os;public class SystemClock{public static long uptimeMillis(){return 100000;}}',
-   'cat/narezany/margyt/Md3.java':'package cat.narezany.margyt;class Md3{static final String KEY_ICONS="md3_icons";static boolean isOn(String key){return true;}static void rail(android.view.View v,int kind){}static void icons(android.view.View v,int kind){}}',
+   'cat/narezany/margyt/FeedHide.java':'package cat.narezany.margyt;class FeedHide{static void reloadSettings(){} static void page(android.view.View v){}}',
+   'cat/narezany/margyt/Md3.java':'package cat.narezany.margyt;class Md3{static final String KEY_ICONS="md3_icons",KEY_FEED="md3_feed";static boolean isOn(String key){return true;}static void rail(android.view.View v,int kind){}static void icons(android.view.View v,int kind){}}',
    'cat/narezany/margyt/FeedRail.java':(ROOT/'inject/java/cat/narezany/margyt/FeedRail.java').read_text(encoding='utf-8'),
    'cat/narezany/margyt/Test.java':'''package cat.narezany.margyt;import android.view.View;public class Test{
 static void check(boolean b,String s){if(!b)throw new AssertionError(s);}public static void main(String[] a){

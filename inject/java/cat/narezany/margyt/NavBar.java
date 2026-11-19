@@ -71,20 +71,20 @@ final class NavBar {
     private static final String[] FRIEND_WORDS = {"друзья", "friends", "друзі"};
 
     // Google's Material Symbols, the rounded set, as they are published: a square of 960 with its top at -960.
-    private static final String HOME_ON = "M160-200v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23"
+    static final String HOME_ON = "M160-200v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23"
             + ".5 56.5T720-120H600q-17 0-28.5-11.5T560-160v-200q0-17-11.5-28.5T520-400h-80q-17 0-28.5 11.5T400-360v"
             + "200q0 17-11.5 28.5T360-120H240q-33 0-56.5-23.5T160-200Z";
-    private static final String HOME_OFF = "M240-200h120v-200q0-17 11.5-28.5T400-440h160q17 0 28.5 11.5T600-400v200h120v-360L480-740 240-560v360"
+    static final String HOME_OFF = "M240-200h120v-200q0-17 11.5-28.5T400-440h160q17 0 28.5 11.5T600-400v200h120v-360L480-740 240-560v360"
             + "Zm-80 0v-360q0-19 8.5-36t23.5-28l240-180q21-16 48-16t48 16l240 180q15 11 23.5 28t8.5 36v360q0 33-23."
             + "5 56.5T720-120H560q-17 0-28.5-11.5T520-160v-200h-80v200q0 17-11.5 28.5T400-120H240q-33 0-56.5-23.5T1"
             + "60-200Zm320-270Z";
-    private static final String FRIENDS_ON = "M40-272q0-34 17.5-62.5T104-378q62-31 126-46.5T360-440q66 0 130 15.5T616-378q29 15 46.5 43.5T680-272v"
+    static final String FRIENDS_ON = "M40-272q0-34 17.5-62.5T104-378q62-31 126-46.5T360-440q66 0 130 15.5T616-378q29 15 46.5 43.5T680-272v"
             + "32q0 33-23.5 56.5T600-160H120q-33 0-56.5-23.5T40-240v-32Zm698 112q11-18 16.5-38.5T760-240v-40q0-44-2"
             + "4.5-84.5T666-434q51 6 96 20.5t84 35.5q36 20 55 44.5t19 53.5v40q0 33-23.5 56.5T840-160H738ZM360-480q-"
             + "66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47Zm400-160q0 66-47 113t-"
             + "113 47q-11 0-28-2.5t-28-5.5q27-32 41.5-71t14.5-81q0-42-14.5-81T544-792q14-5 28-6.5t28-1.5q66 0 113 4"
             + "7t47 113Z";
-    private static final String FRIENDS_OFF = "M40-272q0-34 17.5-62.5T104-378q62-31 126-46.5T360-440q66 0 130 15.5T616-378q29 15 46.5 43.5T680-272v"
+    static final String FRIENDS_OFF = "M40-272q0-34 17.5-62.5T104-378q62-31 126-46.5T360-440q66 0 130 15.5T616-378q29 15 46.5 43.5T680-272v"
             + "32q0 33-23.5 56.5T600-160H120q-33 0-56.5-23.5T40-240v-32Zm800 112H738q11-18 16.5-38.5T760-240v-40q0-"
             + "44-24.5-84.5T666-434q51 6 96 20.5t84 35.5q36 20 55 44.5t19 53.5v40q0 33-23.5 56.5T840-160ZM360-480q-"
             + "66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47Zm400-160q0 66-47 113t-"
@@ -92,23 +92,25 @@ final class NavBar {
             + "7t47 113ZM120-240h480v-32q0-11-5.5-20T580-306q-54-27-109-40.5T360-360q-56 0-111 13.5T140-306q-9 5-14"
             + ".5 14t-5.5 20v32Zm240-320q33 0 56.5-23.5T440-640q0-33-23.5-56.5T360-720q-33 0-56.5 23.5T280-640q0 33"
             + " 23.5 56.5T360-560Zm0 320Zm0-400Z";
-    private static final String INBOX_ON = "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5"
+    static final String CREATE_ON = "M440-440H240q-17 0-28.5-11.5T200-480q0-17 11.5-28.5T240-520h200v-200q0-17 11.5-28.5T480-760q17 0 28.5 11.5T520-720v200h200q17 0 28.5 11.5T760-480q0 17-11.5 28.5T720-440H520v200q0 17-11.5 28.5T480-200q-17 0-28.5-11.5T440-240v-200Z";
+    static final String CREATE_OFF = CREATE_ON;
+    static final String INBOX_ON = "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5"
             + " 56.5T800-160H160Zm320-287q5 0 10.5-1.5T501-453l283-177q8-5 12-12.5t4-16.5q0-20-17-30t-35 1L480-520 "
             + "212-688q-18-11-35-.5T160-659q0 10 4 17.5t12 11.5l283 177q5 3 10.5 4.5T480-447Z";
-    private static final String INBOX_OFF = "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5"
+    static final String INBOX_OFF = "M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5"
             + " 56.5T800-160H160Zm640-480L501-453q-5 3-10.5 4.5T480-447q-5 0-10.5-1.5T459-453L160-640v400h640v-400Z"
-            + "M480-520l320-200H160l320 200ZM160-640v10-59 1-32 32-.5 58.5-10 400-400Z";
-    private static final String PROFILE_ON = "M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-240v-32"
+            + "M480-520l320-200H160l320 200Z";
+    static final String PROFILE_ON = "M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-240v-32"
             + "q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v32q0 33"
             + "-23.5 56.5T720-160H240q-33 0-56.5-23.5T160-240Z";
-    private static final String PROFILE_OFF = "M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-240v-32"
+    static final String PROFILE_OFF = "M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-240v-32"
             + "q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v32q0 33"
             + "-23.5 56.5T720-160H240q-33 0-56.5-23.5T160-240Zm80 0h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480"
             + "-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm240-320q33 0 56.5-23.5T560-640q0-33-23.5-56.5T4"
             + "80-720q-33 0-56.5 23.5T400-640q0 33 23.5 56.5T480-560Zm0-80Zm0 400Z";
     /** The icon of each kind of tab, open and not. */
-    private static final String[][] OUTLINES = {
-            {HOME_OFF, HOME_ON}, {FRIENDS_OFF, FRIENDS_ON}, null, {INBOX_OFF, INBOX_ON}, {PROFILE_OFF, PROFILE_ON}, null};
+    static final String[][] OUTLINES = {
+            {HOME_OFF, HOME_ON}, {FRIENDS_OFF, FRIENDS_ON}, {CREATE_OFF, CREATE_ON}, {INBOX_OFF, INBOX_ON}, {PROFILE_OFF, PROFILE_ON}, null};
     private static final Path[][] DRAWN = new Path[OUTLINES.length][2];
 
     /** How long a tab takes to open, in milliseconds. */
@@ -152,23 +154,29 @@ final class NavBar {
         if (prefs != null) prefs.edit().putBoolean(KEY_NAMES, on).apply();
     }
 
-    /** How the bar looks: the capsule it has been, or the floating one with a round button apart. */
+    /**
+     * How the bar looks:
+     * STYLE_FLOATING_FAB (0) = Type A: Floating capsule pill + separate detached rounded square FAB.
+     * STYLE_M3_BAR (1)       = Type B: Material 3 NavigationBar with elongated horizontal pill indicator.
+     */
     static final String KEY_STYLE = "nav_style";
-    static final int CAPSULE = 0, FLOATING = 1;
+    static final int STYLE_FLOATING_FAB = 0, STYLE_M3_BAR = 1;
+    // Compatibility aliases
+    static final int CAPSULE = STYLE_FLOATING_FAB, FLOATING = STYLE_M3_BAR;
     private static volatile int chosen = -1;
 
     static int style() {
         int known = chosen;
         if (known >= 0) return known;
         SharedPreferences prefs = prefs();
-        if (prefs == null) return CAPSULE;
-        int value = prefs.getInt(KEY_STYLE, CAPSULE) == CAPSULE ? CAPSULE : FLOATING;
+        if (prefs == null) return STYLE_FLOATING_FAB;
+        int value = prefs.getInt(KEY_STYLE, STYLE_FLOATING_FAB) == STYLE_M3_BAR ? STYLE_M3_BAR : STYLE_FLOATING_FAB;
         chosen = value;
         return value;
     }
 
     static void setStyle(int style) {
-        style = style == CAPSULE ? CAPSULE : FLOATING;
+        style = style == STYLE_M3_BAR ? STYLE_M3_BAR : STYLE_FLOATING_FAB;
         chosen = style;
         SharedPreferences prefs = prefs();
         if (prefs != null) prefs.edit().putInt(KEY_STYLE, style).apply();
@@ -391,8 +399,8 @@ final class NavBar {
         return portrait;
     }
 
-    private static Path outline(int kind, boolean open) {
-        if (OUTLINES[kind] == null) return null;
+    static Path outline(int kind, boolean open) {
+        if (kind < 0 || kind >= OUTLINES.length || OUTLINES[kind] == null) return null;
         Path known = DRAWN[kind][open ? 1 : 0];
         if (known != null) return known;
         final Path path = new Path();
@@ -681,7 +689,7 @@ final class NavBar {
          * a view as wide as the bar lying where it does) is taken away, and given back with the bar.
          */
         private void clear(ViewGroup bar) {
-            if (mode != FLOATING) {
+            if (mode != STYLE_FLOATING_FAB) {
                 unclear();
                 return;
             }
@@ -768,8 +776,8 @@ final class NavBar {
         private void stretch(ViewGroup bar) {
             android.view.ViewGroup.LayoutParams params = bar.getLayoutParams();
             if (params == null) return;
-            int want = Math.round(60f * unit);
-            if (mode == FLOATING && worn) {
+            int want = Math.round((mode == STYLE_M3_BAR ? 80f : 72f) * unit);
+            if (worn) {
                 if (params.height >= 0 && params.height != want) {
                     if (heightWas == Integer.MIN_VALUE) heightWas = params.height;
                     params.height = want;
@@ -854,40 +862,12 @@ final class NavBar {
         private int[] palette() {
             int ink = Md3.ink(ground);
             int[] out = new int[5];
-            // there is no container: the buttons lie straight on the page, one tone up from it
-            out[IDLE] = mix(ground, ink, 0.08f);
+            out[IDLE] = mode == STYLE_M3_BAR ? mix(ground, ink, 0.05f) : mix(ground, ink, 0.08f);
             out[PILL] = mix(ground, accent | 0xFF000000, 0.34f);
-            // the name and the icon of the open tab are 4.5:1 on its indicator, whatever the accent is
             out[LIT] = readable(mix(accent | 0xFF000000, ink, 0.40f), out[PILL], ink, 4.5f);
             out[QUIET] = readable(mix(out[IDLE], ink, 0.80f), out[IDLE], ink, 4.5f);
             out[PRIMARY] = accent | 0xFF000000;
             return out;
-        }
-
-        private final Path blob = new Path();
-        private final float[] radii = new float[8];
-
-        /**
-         * The corners of the button at `at` in a connected group (Material 3 Expressive): the two ends of the
-         * group are fully round on the outside, every other corner is small, and the button that is chosen is
-         * round all the way round. A button that is pressed squares off to the small corner, the shape morph.
-         */
-        private void corners(int at, float open, boolean pressed, float height) {
-            float full = height / 2f, small = 8f * unit;
-            float inner = small + (full - small) * open;
-            float left = at == 0 ? full : inner, right = at == tabs.length - 1 ? full : inner;
-            if (pressed) {
-                left = Math.min(left, small);
-                right = Math.min(right, small);
-            }
-            radii[0] = radii[1] = radii[6] = radii[7] = left;
-            radii[2] = radii[3] = radii[4] = radii[5] = right;
-        }
-
-        private void shape(Canvas canvas, RectF area, Paint paint) {
-            blob.rewind();
-            blob.addRoundRect(area, radii, Path.Direction.CW);
-            canvas.drawPath(blob, paint);
         }
 
         /** Where everything goes along the bar, for how far open each tab is now. */
@@ -898,47 +878,30 @@ final class NavBar {
                 top = 0f;
                 bottom = tall;
             }
-            // the floating toolbar is 64dp tall where the bar has the room, and keeps 12dp from the sides
-            if (mode != CAPSULE) {
-                arrangeBar(top, bottom);
-                return;
-            }
-            float room = Math.min(bottom - top - 6f * unit, 64f * unit);
-            float middle = (top + bottom) / 2f;
-            body.set(12f * unit, middle - room / 2f, wide - 12f * unit, middle + room / 2f);
-            reach.set(body.left - unit, body.top - 8f * unit, body.right + unit, body.bottom + unit);
-            float inside = 4f * unit, left = body.left + inside, right = body.right - inside;
-            int centre = tabs.length / 2;
-            if (tabs.length % 2 == 1 && tabs[centre].kind == CREATE) {
-                // The button in the middle stays in the middle. A name that
-                // opens takes its room from the tabs on its own side only.
-                float half = Math.min(32f * unit, (right - left) / tabs.length / 2f);
-                tabs[centre].left = body.centerX() - half;
-                tabs[centre].right = body.centerX() + half;
-                share(0, centre, left, tabs[centre].left);
-                share(centre + 1, tabs.length, tabs[centre].right, right);
+            if (mode == STYLE_FLOATING_FAB) {
+                arrangeFloatingFab(top, bottom);
             } else {
-                share(0, tabs.length, left, right);
+                arrangeM3Bar(top, bottom);
             }
         }
 
         /**
-         * The floating bar: a capsule of the tabs and, apart from it, a large round-cornered button that
-         * makes a video. With no such button the capsule takes the width.
+         * Type A: Floating capsule of tabs + separate detached rounded square button (FAB) beside the capsule.
          */
-        private void arrangeBar(float top, float bottom) {
+        private void arrangeFloatingFab(float top, float bottom) {
             int count = tabs.length;
             fab.setEmpty();
             boolean round = false;
             for (Tab tab : tabs) if (tab.kind == CREATE) round = true;
-            float free = bottom - top - 12f * unit;
-            float height = Math.max(40f * unit, Math.min(48f * unit, free));
-            float size = round ? Math.max(height, Math.min(48f * unit, free)) : 0f;
-            float base = bottom, margin = 16f * unit;
+            float middle = (top + bottom) / 2f;
+            float height = Math.min(48f * unit, bottom - top - 12f * unit);
+            float size = round ? height : 0f;
+            float margin = 12f * unit, spacing = 10f * unit;
             float fabLeft = wide - margin - size;
-            body.set(margin, base - height, round ? fabLeft - 16f * unit : wide - margin, base);
-            if (round) fab.set(fabLeft, base - size, wide - margin, base);
-            float inner = 4f * unit;
+            float cTop = middle - height / 2f, cBottom = middle + height / 2f;
+            body.set(margin, cTop, round ? fabLeft - spacing : wide - margin, cBottom);
+            if (round) fab.set(fabLeft, cTop, wide - margin, cBottom);
+            float inner = 6f * unit;
             int columns = count - (round ? 1 : 0);
             float column = columns <= 0 ? 0f : (body.width() - 2f * inner) / columns;
             int at = 0;
@@ -952,53 +915,48 @@ final class NavBar {
                     at++;
                 }
             }
-            reach.set(body.left - 2f * unit, (round ? Math.min(body.top, fab.top) : body.top) - 4f * unit,
-                    (round ? fab.right : body.right) + 2f * unit, base + 4f * unit);
+            reach.set(body.left - 2f * unit, body.top - 4f * unit,
+                    (round ? fab.right : body.right) + 2f * unit, body.bottom + 4f * unit);
         }
 
-        private void allCorners(float radius) {
-            for (int k = 0; k < radii.length; k++) radii[k] = radius;
-        }
-
-        /** The tabs from one to another, side by side between two places on the bar. */
-        private void share(int from, int to, float left, float right) {
-            float[] open = new float[to - from], extra = new float[to - from];
-            for (int i = from; i < to; i++) {
-                open[i - from] = tabs[i].open;
-                extra[i - from] = tabs[i].name == null || tabs[i].kind == CREATE ? 0f
-                        : (namesShown() ? tabs[i].nameWide + 8f * unit : 0f) + badge(tabs[i]);
+        /**
+         * Type B: Material 3 NavigationBar: full-width bottom bar containing all destinations with equal spacing.
+         */
+        private void arrangeM3Bar(float top, float bottom) {
+            int count = tabs.length;
+            fab.setEmpty();
+            body.set(0f, top, wide, bottom);
+            float column = count <= 0 ? 0f : wide / (float) count;
+            for (int i = 0; i < count; i++) {
+                tabs[i].left = i * column;
+                tabs[i].right = tabs[i].left + column;
             }
-            // 48dp: Material 3's smallest touch target
-            float[] edges = NavPlan.edges(right - left, open, extra, 48f * unit);
-            for (int i = from; i < to; i++) {
-                tabs[i].left = left + edges[i - from];
-                tabs[i].right = left + edges[i - from + 1];
-            }
+            reach.set(0f, top - 2f * unit, wide, bottom + 2f * unit);
         }
 
         /** Each of TikTok's tabs goes under the place its icon is drawn, so that is where it is touched. */
         private void place() {
-            // with a round button apart from the capsule, the capsule's own last tab is the one before it
             int last = tabs.length - 1;
-            if (mode == FLOATING && !fab.isEmpty()) while (last > 0 && tabs[last].kind == CREATE) last--;
+            if (mode == STYLE_FLOATING_FAB && !fab.isEmpty()) {
+                while (last > 0 && tabs[last].kind == CREATE) last--;
+            }
             for (int i = 0; i < tabs.length; i++) {
                 Tab tab = tabs[i];
                 View view = tab.view;
                 if (view.getWidth() <= 0) continue;
-                // the margins of the bar belong to the tabs at its ends
-                float left = i == 0 ? 0f : tab.left, right = i == tabs.length - 1 ? wide : tab.right;
-                if (mode == FLOATING) {
-                    left = i == 0 ? body.left : tab.left;
-                    right = i == last && tab.kind != CREATE ? body.right : tab.right;
+                float left = tab.left, right = tab.right;
+                if (mode == STYLE_FLOATING_FAB) {
+                    if (tab.kind != CREATE) {
+                        if (i == 0) left = body.left;
+                        if (i == last) right = body.right;
+                    }
                 }
                 float shift = (left + right) / 2f - (view.getLeft() + view.getWidth() / 2f);
-                // a bar that is out of sight has its tabs off the side of the screen, where no finger is
                 if (awayTo >= 1f) shift += wide * 3f;
                 float stretch = (right - left) / view.getWidth();
                 if (Math.abs(view.getPivotX() - view.getWidth() / 2f) > 0.5f) view.setPivotX(view.getWidth() / 2f);
                 if (Math.abs(view.getTranslationX() - shift) > 0.5f) view.setTranslationX(shift);
                 if (Math.abs(view.getScaleX() - stretch) > 0.002f) view.setScaleX(stretch);
-                // still there and still touched, and not drawn
                 if (view.getClipBounds() == null) view.setClipBounds(NOTHING);
             }
         }
@@ -1010,15 +968,21 @@ final class NavBar {
                     Math.round(255f * (1f - away))) : -1;
             int idle = shown[IDLE], pill = shown[PILL], lit = shown[LIT], quiet = shown[QUIET], primary = shown[PRIMARY];
 
-            // the buttons are 48dp tall, as many as fit of the 8dp it would like round them
-            float lift = Math.max(4f * unit, Math.min(8f * unit, (body.height() - 48f * unit) / 2f));
-
-            float middle = body.centerY(), icon = 24f * unit, gap = 6f * unit;
-            // what the buttons lie in: the capsule bar has nothing, the floating one a capsule of its own
-            if (mode == FLOATING) {
-                fill.setColor(idle);
-                canvas.drawRoundRect(body, body.height() / 2f, body.height() / 2f, fill);
+            if (mode == STYLE_FLOATING_FAB) {
+                drawFloatingFab(canvas, idle, pill, lit, quiet, primary);
+            } else {
+                drawM3Bar(canvas, idle, pill, lit, quiet, primary);
             }
+
+            if (veil >= 0) canvas.restoreToCount(veil);
+        }
+
+        private void drawFloatingFab(Canvas canvas, int idle, int pill, int lit, int quiet, int primary) {
+            fill.setColor(idle);
+            canvas.drawRoundRect(body, body.height() / 2f, body.height() / 2f, fill);
+
+            float middle = body.centerY(), icon = 24f * unit;
+
             for (int at = 0; at < tabs.length; at++) {
                 Tab tab = tabs[at];
                 int saved = -1;
@@ -1027,85 +991,122 @@ final class NavBar {
                             Math.round(tab.shown * 255f));
                 }
                 float centre = (tab.left + tab.right) / 2f;
-                if (tab.kind == CREATE && mode == FLOATING) {
-                    // the large button apart from the capsule
-                    allCorners(fab.width() * 0.35f);
-                    create(canvas, fab, primary, tab.pressed, fab.width() * 0.125f);
-                } else if (tab.kind == CREATE && mode == CAPSULE) {
-                    // a filled button of the same group: the same height and corners as the others
-                    float height = body.height() - 2f * lift;
-                    corners(at, 0f, tab.pressed, height);
-                    box.set(tab.left + unit, body.top + lift, tab.right - unit, body.bottom - lift);
-                    create(canvas, box, primary, tab.pressed);
+                if (tab.kind == CREATE) {
+                    float fabCorner = 16f * unit;
+                    create(canvas, fab, primary, tab.pressed, fab.width() * 0.18f, fabCorner);
                 } else {
-                    // a name too long for its tab is set a little smaller before it is cut short
-                    boolean names = namesShown() && mode != FLOATING;
-                    float badge = mode == FLOATING ? 0f : badge(tab);
-                    float room = Math.max(0f, tab.right - tab.left - 2f * 8f * unit - icon - gap - badge);
-                    float shrink = tab.name == null || tab.nameWide <= room ? 1f : Math.max(0.82f, room / tab.nameWide);
-                    float text = tab.name == null || !names ? 0f : Math.min(tab.nameWide * shrink, room);
-                    float between = text > 0f ? gap : 0f;
-                    if (mode == CAPSULE) {
-                        // a connected button group: every tab is a button, 2dp from the next. The one chosen
-                        // is fully round; the others have the group's small corners, and a button that is
-                        // pressed squares off to the smallest, which is the shape morph of Material 3 Expressive
-                        float half = (tab.right - tab.left) / 2f - unit;
-                        float height = body.height() - 2f * lift;
-                        corners(at, tab.open, tab.pressed, height);
-                        box.set(centre - half, body.top + lift, centre + half, body.bottom - lift);
-                        fill.setColor(mix(idle, pill, tab.open));
-                        shape(canvas, box, fill);
-                    } else {
-                        // the floating bar: a round indicator behind the open tab, nothing behind the rest
-                        float high = Math.min(48f * unit, body.height() - 8f * unit);
-                        float half = Math.min((tab.right - tab.left) / 2f - 2f * unit, 32f * unit);
-                        box.set(centre - half, middle - high / 2f, centre + half, middle + high / 2f);
-                        allCorners(high / 2f);
-                        if (tab.open > 0.01f) {
-                            fill.setColor(pill);
-                            fill.setAlpha(Math.round(255f * tab.open));
-                            shape(canvas, box, fill);
-                            fill.setAlpha(255);
-                        }
-                    }
-                    if (tab.pressed) {
-                        // Material 3's state layer: the colour of what is on it, a tenth of it
-                        fill.setColor(mix(quiet, lit, tab.open));
-                        fill.setAlpha(26);
-                        shape(canvas, box, fill);
+                    float radius = Math.min((body.height() - 8f * unit) / 2f, 20f * unit);
+                    if (tab.open > 0.01f) {
+                        fill.setColor(pill);
+                        fill.setAlpha(Math.round(255f * tab.open));
+                        float r = radius * (0.6f + 0.4f * tab.open);
+                        canvas.drawCircle(centre, middle, r, fill);
                         fill.setAlpha(255);
                     }
-                    float content = icon + tab.open * (between + text + badge);
-                    float start = centre - content / 2f;
+                    if (tab.pressed) {
+                        fill.setColor(mix(quiet, lit, tab.open));
+                        fill.setAlpha(26);
+                        canvas.drawCircle(centre, middle, radius, fill);
+                        fill.setAlpha(255);
+                    }
                     int colour = mix(quiet, lit, tab.open);
-                    emblem(canvas, tab, start, middle - icon / 2f, icon, colour);
-                    if (tab.name != null && tab.open > 0.05f && text > 0f) {
-                        int clip = canvas.save();
-                        canvas.clipRect(start + icon, body.top, Math.min(start + icon + gap + text, tab.right), body.bottom);
-                        words.setTextSize(sp(14f) * shrink);
-                        words.setColor(colour);
-                        words.setAlpha(Math.round(255f * tab.open));
-                        Paint.FontMetrics metrics = words.getFontMetrics();
-                        canvas.drawText(tab.name, start + icon + gap,
-                                middle - (metrics.ascent + metrics.descent) / 2f, words);
-                        words.setTextSize(sp(14f));
-                        canvas.restoreToCount(clip);
-                    }
+                    emblem(canvas, tab, centre - icon / 2f, middle - icon / 2f, icon, colour);
                     if (tab.count != null) {
-                        // on the corner of the icon while the tab is shut, and after its name once
-                        // it is open, where it is not over the first letters of it
-                        float spread = mode == FLOATING ? 0f : tab.open;
-                        float high = 16f * unit;
-                        float shutLeft = start + icon - 9f * unit, shutUp = Math.max(body.top + unit, middle - icon / 2f - 5f * unit);
-                        float openLeft = start + icon + between + text + 4f * unit, openUp = middle - high / 2f;
-                        number(canvas, tab.count, shutLeft + (openLeft - shutLeft) * spread,
-                                shutUp + (openUp - shutUp) * spread, mix(idle, pill, tab.open));
+                        float shutLeft = centre + icon / 2f - 4f * unit;
+                        float shutUp = Math.max(body.top + unit, middle - icon / 2f - 4f * unit);
+                        number(canvas, tab.count, shutLeft, shutUp, idle);
+                    } else if (tab.dot) {
+                        spot(canvas, centre + icon / 2f + 2f * unit, middle - icon / 2f + 3f * unit, idle);
                     }
-                    else if (tab.dot) spot(canvas, start + icon - 2f * unit, middle - icon / 2f + 3f * unit, idle);
                 }
                 if (saved >= 0) canvas.restoreToCount(saved);
             }
-            if (veil >= 0) canvas.restoreToCount(veil);
+        }
+
+        private void drawM3Bar(Canvas canvas, int idle, int pill, int lit, int quiet, int primary) {
+            fill.setColor(idle);
+            canvas.drawRect(body.left, body.top, body.right, body.bottom, fill);
+            line.setColor(mix(idle, quiet, 0.18f));
+            line.setStrokeWidth(1f * unit);
+            line.setStrokeCap(Paint.Cap.BUTT);
+            canvas.drawLine(body.left, body.top, body.right, body.top, line);
+
+            float icon = 24f * unit;
+            boolean showLabels = namesShown();
+
+            for (int at = 0; at < tabs.length; at++) {
+                Tab tab = tabs[at];
+                int saved = -1;
+                if (tab.shown < 0.99f) {
+                    saved = canvas.saveLayerAlpha(tab.left, reach.top, tab.right, reach.bottom,
+                            Math.round(tab.shown * 255f));
+                }
+                float centre = (tab.left + tab.right) / 2f;
+                boolean hasLabel = showLabels && tab.name != null && tab.kind != CREATE;
+
+                float pillTop, pillBottom, pillCenterY, labelBaseline;
+                if (showLabels) {
+                    pillTop = body.top + 12f * unit;
+                    pillBottom = pillTop + 32f * unit;
+                    pillCenterY = (pillTop + pillBottom) / 2f;
+                    labelBaseline = pillBottom + 16f * unit;
+                } else {
+                    pillTop = body.centerY() - 16f * unit;
+                    pillBottom = body.centerY() + 16f * unit;
+                    pillCenterY = body.centerY();
+                    labelBaseline = 0f;
+                }
+
+                float pillFullWidth = Math.min(tab.right - tab.left - 8f * unit, 64f * unit);
+                if (tab.open > 0.01f) {
+                    float curPillW = 32f * unit + (pillFullWidth - 32f * unit) * tab.open;
+                    box.set(centre - curPillW / 2f, pillTop, centre + curPillW / 2f, pillBottom);
+                    fill.setColor(pill);
+                    fill.setAlpha(Math.round(255f * tab.open));
+                    canvas.drawRoundRect(box, 16f * unit, 16f * unit, fill);
+                    fill.setAlpha(255);
+                }
+                if (tab.pressed) {
+                    box.set(centre - pillFullWidth / 2f, pillTop, centre + pillFullWidth / 2f, pillBottom);
+                    fill.setColor(mix(quiet, lit, tab.open));
+                    fill.setAlpha(26);
+                    canvas.drawRoundRect(box, 16f * unit, 16f * unit, fill);
+                    fill.setAlpha(255);
+                }
+
+                int colour = mix(quiet, lit, tab.open);
+                if (tab.kind == CREATE) {
+                    float arm = 7f * unit;
+                    line.setColor(colour);
+                    line.setStrokeWidth(2.5f * unit);
+                    line.setStrokeCap(Paint.Cap.ROUND);
+                    canvas.drawLine(centre - arm, pillCenterY, centre + arm, pillCenterY, line);
+                    canvas.drawLine(centre, pillCenterY - arm, centre, pillCenterY + arm, line);
+                    line.setStrokeCap(Paint.Cap.BUTT);
+                } else {
+                    emblem(canvas, tab, centre - icon / 2f, pillCenterY - icon / 2f, icon, colour);
+                }
+
+                if (hasLabel) {
+                    words.setTextSize(sp(12f));
+                    words.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                    words.setTextAlign(Paint.Align.CENTER);
+                    words.setColor(colour);
+                    canvas.drawText(tab.name, centre, labelBaseline, words);
+                    words.setTextAlign(Paint.Align.LEFT);
+                    words.setTextSize(sp(14f));
+                }
+
+                if (tab.count != null) {
+                    float badgeLeft = centre + 10f * unit;
+                    float badgeUp = pillTop - 3f * unit;
+                    number(canvas, tab.count, badgeLeft, badgeUp, idle);
+                } else if (tab.dot) {
+                    spot(canvas, centre + 14f * unit, pillTop + 2f * unit, idle);
+                }
+
+                if (saved >= 0) canvas.restoreToCount(saved);
+            }
         }
 
         /** The icon of a tab: one of the mod's, or TikTok's own for a tab the mod has none for. */
@@ -1156,19 +1157,23 @@ final class NavBar {
 
         /** The button that makes a video: a filled button of the group, in the accent, with a plus on it. */
         private void create(Canvas canvas, RectF area, int primary, boolean pressed) {
-            create(canvas, area, primary, pressed, 6.5f * unit);
+            create(canvas, area, primary, pressed, 6.5f * unit, 16f * unit);
         }
 
         private void create(Canvas canvas, RectF area, int primary, boolean pressed, float arm) {
+            create(canvas, area, primary, pressed, arm, 16f * unit);
+        }
+
+        private void create(Canvas canvas, RectF area, int primary, boolean pressed, float arm, float corner) {
             float centre = area.centerX(), middle = area.centerY();
             // the plus is as readable on the accent as white or near-black can make it
             int on = contrast(0xFFFFFFFF, primary) >= contrast(0xFF161823, primary) ? 0xFFFFFFFF : 0xFF161823;
             fill.setColor(primary);
-            shape(canvas, area, fill);
+            canvas.drawRoundRect(area, corner, corner, fill);
             if (pressed) {
                 fill.setColor(on);
                 fill.setAlpha(26);
-                shape(canvas, area, fill);
+                canvas.drawRoundRect(area, corner, corner, fill);
                 fill.setAlpha(255);
             }
             line.setStrokeWidth(arm * 0.37f);
@@ -1216,7 +1221,7 @@ final class NavBar {
     }
 
     private static float luminance(int colour) {
-        float[] channel = {Color.red(colour) / 255f, Color.green(colour) / 255f, Color.blue(colour) / 255f};
+        float[] channel = {((colour >> 16) & 0xFF) / 255f, ((colour >> 8) & 0xFF) / 255f, (colour & 0xFF) / 255f};
         for (int i = 0; i < 3; i++) {
             channel[i] = channel[i] <= 0.03928f ? channel[i] / 12.92f : (float) Math.pow((channel[i] + 0.055f) / 1.055f, 2.4f);
         }
@@ -1236,15 +1241,15 @@ final class NavBar {
     }
 
     static float bright(int colour) {
-        return (0.299f * Color.red(colour) + 0.587f * Color.green(colour) + 0.114f * Color.blue(colour)) / 255f;
+        return (0.299f * ((colour >> 16) & 0xFF) + 0.587f * ((colour >> 8) & 0xFF) + 0.114f * (colour & 0xFF)) / 255f;
     }
 
     static int mix(int from, int to, float how) {
         if (how <= 0f) return from;
         if (how >= 1f) return to;
-        return Color.argb(255,
-                Math.round(Color.red(from) + (Color.red(to) - Color.red(from)) * how),
-                Math.round(Color.green(from) + (Color.green(to) - Color.green(from)) * how),
-                Math.round(Color.blue(from) + (Color.blue(to) - Color.blue(from)) * how));
+        int r = Math.round(((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * how);
+        int g = Math.round(((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * how);
+        int b = Math.round((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * how);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 }

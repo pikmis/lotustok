@@ -65,6 +65,7 @@ final class Md3 {
                 context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, value).apply();
             }
         }
+        FeedRail.restyle();
     }
 
     private static boolean on(int which) {
@@ -121,10 +122,10 @@ final class Md3 {
         Boolean known = PART_ON[which];
         if (known != null) return known;
         Context context = Margy.context();
-        if (context == null) return true;  // too early to know; not remembered
-        boolean value = true;
+        if (context == null) return which != COLUMN;  // column off by default so action buttons sit clean & airy
+        boolean value = which != COLUMN;
         try {
-            value = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(PARTS[which], true);
+            value = context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getBoolean(PARTS[which], value);
         } catch (Throwable ignored) {
         }
         PART_ON[which] = value;
@@ -845,49 +846,11 @@ final class Md3 {
             icons(slot, which);
             boolean feed = on(FEED);
             companions(slot, feed);
-            if (!part(COLUMN)) {
-                strip(slot);
-                flatten(slot, false, true);
-                boolean moved = part(SHIFT);
-                slot.setTranslationX(moved ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
-                if (moved) unclip(slot);
-                return;
-            }
-            flatten(slot, true, true);
-            // the column is wider than the button it is the background of, and a view's
-            // background is cut at its edge unless what holds it lets it draw outside
-            Object holder = slot.getParent();
-            for (int i = 0; i < 3 && holder instanceof ViewGroup; i++) {
-                ((ViewGroup) holder).setClipChildren(false);
-                ((ViewGroup) holder).setClipToPadding(false);
-                holder = ((ViewGroup) holder).getParent();
-            }
-            // TikTok sets the icons 32 dp in from the edge; the column needs more room than that on each side
-            slot.setTranslationX(part(SHIFT) ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
-            boolean first = true, last = true;
-            for (int i = 0; i < which; i++) if (FeedRail.shown(i)) first = false;
-            for (int i = which + 1; i < FeedRail.KEYS.length; i++) if (FeedRail.shown(i)) last = false;
-            float unit = slot.getResources().getDisplayMetrics().density;
-            View picture = pictureOf(slot, 0);
-            // what TikTok lays over a button when it is pressed is a square; the section has its own
-            Shape card = wear(slot, CARD, false);
-            // the slot is as wide as a touch counts and flush with the screen: the column is drawn
-            // round the icon's own place, which is what the button is centred on too
-            card.right = 8f * unit;
-            card.wide = 72f * unit;
-            card.top = 0f;
-            card.head = 4f * unit;
-            card.gap = 2f * unit;
-            card.reach = last ? 5f * unit : 0f;
-            card.bottom = last ? 4f * unit : 0f;
-            card.ends(first ? 27f * unit : 8f * unit, last ? 22f * unit : 8f * unit);
-            card.around = picture == null ? null : new WeakReference<View>(picture);
-            card.host = new WeakReference<View>(slot);
-            card.button = 21f * unit;
-            card.squares = false;
-            card.buttonCorner = 15f * unit;
-            card.buttonPressed = 9f * unit;
-            card.dress(slot, OVER_VIDEO);
+            strip(slot);
+            flatten(slot, false, true);
+            boolean moved = part(SHIFT);
+            slot.setTranslationX(moved ? -COLUMN_SHIFT * slot.getResources().getDisplayMetrics().density : 0f);
+            if (moved) unclip(slot);
         } catch (Throwable error) {
             Diary.detail("md3: rail: " + error);
         }
@@ -895,39 +858,16 @@ final class Md3 {
 
     // ------------------------------------------------- the feed's icons
 
-    // In a square of twenty-four. The heart and the arrow are Google's Material Icons,
-    // the rounded set, which is filled and as heavy as TikTok's own; the bubble and the
-    // bookmark are drawn to go with them, rounder than Google's, which are nearly square.
-    private static final String LIKE = "M13.35 20.13c-.76.69-1.93.69-2.69-.01l-.11-.1C5.3 15.27 1.87 12.16 2 8.28"
-            + "c.06-1.7.93-3.33 2.34-4.29 2.64-1.8 5.9-.96 7.66 1.1 1.76-2.06 5.02-2.91 7.66-1.1 1.41.96 2.28 2.59 2.34 4.29"
-            + ".14 3.88-3.3 6.99-8.55 11.76l-.1.09z";
-    private static final String COMMENT = "M12 3C6.48 3 2 6.8 2 11.5c0 2.6 1.38 4.93 3.55 6.5-.2 1.2-.83 2.4-1.75 3.3"
-            + "-.3.3-.08.8.34.76 2.1-.2 3.9-1 5.2-2.03.85.18 1.74.27 2.66.27 5.52 0 10-3.8 10-8.5S17.52 3 12 3z"
-            + "M7.4 10.1c.77 0 1.4.63 1.4 1.4s-.63 1.4-1.4 1.4S6 12.27 6 11.5s.63-1.4 1.4-1.4z"
-            + "M12 10.1c.77 0 1.4.63 1.4 1.4s-.63 1.4-1.4 1.4-1.4-.63-1.4-1.4.63-1.4 1.4-1.4z"
-            + "M16.6 10.1c.77 0 1.4.63 1.4 1.4s-.63 1.4-1.4 1.4-1.4-.63-1.4-1.4.63-1.4 1.4-1.4z";
-    private static final String SAVE = "M7.5 3h9q2.5 0 2.5 2.5v14.1q0 1.4-1.3.85L12 18.2l-5.7 2.25Q5 21 5 19.6V5.5Q5 3 7.5 3z";
-    private static final String SHARE = "M10 9V7.41c0-.89-1.08-1.34-1.71-.71L3.7 11.29c-.39.39-.39 1.02 0 1.41l4.59 4.59"
-            + "c.63.63 1.71.19 1.71-.7V14.9c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z";
+    // Google's Material Symbols Rounded (960x960 coordinate space)
+    private static final String LIKE = MaterialSymbols.LIKE_ON;
+    private static final String COMMENT = MaterialSymbols.COMMENT_ON;
+    private static final String SAVE = MaterialSymbols.FAVORITE_ON;
+    private static final String SHARE = MaterialSymbols.SHARE_ARROW;
     private static final String[] GLYPHS = {LIKE, COMMENT, SAVE, SHARE};
-    private static final android.graphics.Path[] DRAWN = new android.graphics.Path[GLYPHS.length];
 
     private static android.graphics.Path glyph(int which) {
-        android.graphics.Path known = DRAWN[which];
-        if (known != null) return known;
-        final android.graphics.Path path = new android.graphics.Path();
-        // the dots of the bubble are holes in it
-        path.setFillType(android.graphics.Path.FillType.EVEN_ODD);
-        NavPlan.trace(GLYPHS[which], new NavPlan.Pen() {
-            @Override public void move(float x, float y) { path.moveTo(x, y); }
-            @Override public void line(float x, float y) { path.lineTo(x, y); }
-            @Override public void curve(float x1, float y1, float x2, float y2, float x, float y) {
-                path.cubicTo(x1, y1, x2, y2, x, y);
-            }
-            @Override public void close() { path.close(); }
-        });
-        DRAWN[which] = path;
-        return path;
+        if (which < 0 || which >= GLYPHS.length) return null;
+        return MaterialSymbols.path(GLYPHS[which]);
     }
 
     /**
@@ -956,8 +896,10 @@ final class Md3 {
             canvas.translate(box.exactCenterX() - side / 2f, box.exactCenterY() - side / 2f);
             // the share arrow is Google's reply arrow, turned to point the other way
             if (which == 3) canvas.scale(-1f, 1f, side / 2f, 0f);
-            canvas.scale(side / 24f, side / 24f);
-            canvas.drawPath(glyph(which), paint);
+            canvas.scale(side / 960f, side / 960f);
+            canvas.translate(0f, 960f);
+            android.graphics.Path p = glyph(which);
+            if (p != null) canvas.drawPath(p, paint);
             canvas.restoreToCount(saved);
         }
 
@@ -1191,16 +1133,18 @@ final class Md3 {
     private static final int WATCHED = 0x4D617251;
     private static final long QUIET = 350L;
 
-    private static final class Screen implements ViewTreeObserver.OnGlobalLayoutListener, ViewTreeObserver.OnPreDrawListener {
+    private static final class Screen implements ViewTreeObserver.OnGlobalLayoutListener, ViewTreeObserver.OnPreDrawListener, ViewTreeObserver.OnScrollChangedListener {
         final WeakReference<View> root;
         long looked;
         boolean owed;
+        boolean dirty = true;
         /** Lists whose rows come and go without the screen being laid out. */
         WeakReference<ViewGroup> rows = new WeakReference<ViewGroup>(null), cells = new WeakReference<ViewGroup>(null);
         WeakReference<ViewGroup> tabs = new WeakReference<ViewGroup>(null), feedTabs = new WeakReference<ViewGroup>(null);
         int rowsSeen, cellsSeen, tabChosen = -2, feedChosen = -2;
         final Runnable later = () -> {
             owed = false;
+            dirty = true;
             look();
         };
 
@@ -1210,6 +1154,7 @@ final class Md3 {
 
         @Override
         public void onGlobalLayout() {
+            dirty = true;
             View view = root.get();
             if (view == null) return;
             long now = SystemClock.uptimeMillis();
@@ -1223,6 +1168,11 @@ final class Md3 {
             look();
         }
 
+        @Override
+        public void onScrollChanged() {
+            dirty = true;
+        }
+
         void look() {
             View view = root.get();
             if (view == null || !view.isAttachedToWindow()) return;
@@ -1232,76 +1182,117 @@ final class Md3 {
                 names(view.getContext());
                 visit(view, 0, false);
                 FeedRail.restyle();
+                dirty = true;
+                applyStyles();
                 Probe.stop(Probe.LOOK, probe);
             } catch (Throwable error) {
                 Diary.detail("md3: " + error);
             }
         }
 
+        void dressRows() {
+            ViewGroup list = rows.get();
+            if (list != null && list.isAttachedToWindow()) {
+                int many = list.getChildCount();
+                for (int i = 0; i < many; i++) {
+                    View child = list.getChildAt(i);
+                    if (kind(child) != K_ROW) {
+                        row(child, 0, true, true);
+                        continue;
+                    }
+                    boolean head = i == 0 ? !list.canScrollVertically(-1) : kind(list.getChildAt(i - 1)) != K_ROW;
+                    boolean tail = i == many - 1 ? !list.canScrollVertically(1) : kind(list.getChildAt(i + 1)) != K_ROW;
+                    row(child, 0, head, tail);
+                }
+                InboxM3.frame(list);
+            }
+        }
+
+        void dressCells() {
+            ViewGroup grid = cells.get();
+            if (grid != null && grid.isAttachedToWindow() && grid.getChildCount() > 0) {
+                if (grid.getChildCount() != cellsSeen) {
+                    cellsSeen = grid.getChildCount();
+                    for (int i = 0; i < grid.getChildCount(); i++) cell(grid.getChildAt(i));
+                }
+                for (int i = 0; i < 3 && i < grid.getChildCount(); i++) {
+                    cell(grid.getChildAt(i));
+                    cell(grid.getChildAt(grid.getChildCount() - 1 - i));
+                }
+            }
+        }
+
+        void tabs() {
+            ViewGroup strip = tabs.get();
+            if (strip != null && strip.isAttachedToWindow()) {
+                int chosen = chosenIn(strip);
+                if (chosen != tabChosen) {
+                    tabChosen = chosen;
+                    boolean expressive = ProfileM3.isEnabled();
+                    pills(strip, on(PROFILE), expressive ? 0f : 3f, expressive ? 0f : 3f, expressive ? SECONDARY : CHOSEN);
+                }
+            }
+        }
+
+        void feedTabs() {
+            ViewGroup strip = feedTabs.get();
+            if (strip != null && strip.isAttachedToWindow()) {
+                int chosen = chosenIn(strip);
+                if (chosen != feedChosen) {
+                    feedChosen = chosen;
+                    pills(strip, part(TABS), 2f, 13f, CHOSEN_OVER_VIDEO);
+                }
+                // TikTok gives the line its colour back when the feed under it changes
+                underline(strip, false);
+            }
+        }
+
+        void applyStyles() {
+            long probe = Probe.start();
+            FeedRail.icons();
+            Probe.stop(Probe.RAIL_ICONS, probe);
+            probe = Probe.start();
+            FeedHide.frame();
+            Probe.stop(Probe.HIDE_FRAME, probe);
+            recolour();
+            dressRows();
+            dressCells();
+            tabs();
+            feedTabs();
+        }
+
         @Override
         public boolean onPreDraw() {
+            if (!dirty) return true;
+            dirty = false;
             long whole = Probe.start();
             try {
-                long probe = Probe.start();
-                FeedRail.icons();
-                Probe.stop(Probe.RAIL_ICONS, probe);
-                probe = Probe.start();
-                FeedHide.frame();
-                Probe.stop(Probe.HIDE_FRAME, probe);
-                recolour();
-                // Every row there is, every frame: which of them begins a group
-                // and which ends one changes as the list is scrolled, and there
-                // are a dozen of them.
-                ViewGroup list = rows.get();
-                if (list != null && list.isAttachedToWindow()) {
-                    int many = list.getChildCount();
-                    for (int i = 0; i < many; i++) {
-                        View child = list.getChildAt(i);
-                        if (kind(child) != K_ROW) {
-                            row(child, 0, true, true);
-                            continue;
-                        }
-                        boolean head = i == 0 ? !list.canScrollVertically(-1) : kind(list.getChildAt(i - 1)) != K_ROW;
-                        boolean tail = i == many - 1 ? !list.canScrollVertically(1) : kind(list.getChildAt(i + 1)) != K_ROW;
-                        row(child, 0, head, tail);
-                    }
-                    InboxM3.frame(list);
-                }
-                ViewGroup grid = cells.get();
-                if (grid != null && grid.isAttachedToWindow() && grid.getChildCount() > 0) {
-                    if (grid.getChildCount() != cellsSeen) {
-                        cellsSeen = grid.getChildCount();
-                        for (int i = 0; i < grid.getChildCount(); i++) cell(grid.getChildAt(i));
-                    }
-                    for (int i = 0; i < 3 && i < grid.getChildCount(); i++) {
-                        cell(grid.getChildAt(i));
-                        cell(grid.getChildAt(grid.getChildCount() - 1 - i));
-                    }
-                }
-                ViewGroup strip = tabs.get();
-                if (strip != null && strip.isAttachedToWindow()) {
-                    int chosen = chosenIn(strip);
-                    if (chosen != tabChosen) {
-                        tabChosen = chosen;
-                        boolean expressive = ProfileM3.isEnabled();
-                        pills(strip, on(PROFILE), expressive ? 0f : 3f, expressive ? 0f : 3f, expressive ? SECONDARY : CHOSEN);
-                    }
-                }
-                strip = feedTabs.get();
-                if (strip != null && strip.isAttachedToWindow()) {
-                    int chosen = chosenIn(strip);
-                    if (chosen != feedChosen) {
-                        feedChosen = chosen;
-                        pills(strip, part(TABS), 2f, 13f, CHOSEN_OVER_VIDEO);
-                    }
-                    // TikTok gives the line its colour back when the feed under it changes
-                    underline(strip, false);
-                }
+                applyStyles();
             } catch (Throwable ignored) {
                 // a list taken apart in the middle of a frame is looked at again on the next
             }
             Probe.stop(Probe.PRE_DRAW, whole);
             return true;
+        }
+
+        private void hookRecycling(ViewGroup group) {
+            if (group == null) return;
+            group.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if (l != ol || t != ot || r != or || b != ob) {
+                    dirty = true;
+                }
+            });
+            group.setOnHierarchyChangeListener(new ViewGroup.OnHierarchyChangeListener() {
+                @Override
+                public void onChildViewAdded(View parent, View child) {
+                    dirty = true;
+                }
+
+                @Override
+                public void onChildViewRemoved(View parent, View child) {
+                    dirty = true;
+                }
+            });
         }
 
         private void visit(View view, int depth, boolean inProfile) {
@@ -1338,7 +1329,10 @@ final class Md3 {
                     ViewGroup list = (ViewGroup) parent;
                     // the first row is wrapped in a header; the list is what holds the plain ones
                     if (list.getChildCount() > 2 || rows.get() == null) {
-                        if (rows.get() != list) rowsSeen = -1;
+                        if (rows.get() != list) {
+                            rowsSeen = -1;
+                            hookRecycling(list);
+                        }
                         rows = new WeakReference<ViewGroup>(list);
                     }
                 }
@@ -1349,7 +1343,9 @@ final class Md3 {
                 if (!inProfile) return;
                 Object parent = view.getParent();
                 if (parent instanceof ViewGroup && cells.get() != parent) {
-                    cells = new WeakReference<ViewGroup>((ViewGroup) parent);
+                    ViewGroup grid = (ViewGroup) parent;
+                    hookRecycling(grid);
+                    cells = new WeakReference<ViewGroup>(grid);
                     cellsSeen = -1;
                 }
                 cell(view);
@@ -1358,7 +1354,8 @@ final class Md3 {
             if (kind == K_NAV) {
                 // Over a profile's picture the buttons are white, and a disc the
                 // colour of a light page would hide them; there they go without.
-                icons(view, 0, inProfile ? on(PROFILE) && onDark(view) : on(INBOX));
+                // In activity/inbox headers, do not draw black patch discs
+                icons(view, 0, inProfile && on(PROFILE) && onDark(view));
                 return;
             }
             if (view instanceof ViewGroup) {
@@ -1399,6 +1396,7 @@ final class Md3 {
             if (feedTabs.get() != strip) {
                 feedTabs = new WeakReference<ViewGroup>(strip);
                 feedChosen = -2;
+                strip.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> dirty = true);
             }
         }
 
@@ -1432,6 +1430,9 @@ final class Md3 {
                         next.setAlpha(0f);
                     }
                 }
+            }
+            if (tabs.get() != strip) {
+                strip.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> dirty = true);
             }
             tabs = new WeakReference<ViewGroup>(strip);
             tabChosen = -2;
@@ -1501,8 +1502,7 @@ final class Md3 {
     private static void icons(View view, int depth, boolean on) {
         if (depth > 6 || view.getVisibility() != View.VISIBLE) return;
         if (kind(view) == K_ICON) {
-            float unit = view.getResources().getDisplayMetrics().density;
-            if (view.isFocusable() && view.getWidth() >= 32 * unit) disc(view, on, SHELL, 19f);
+            strip(view);
             return;
         }
         if (view instanceof ViewGroup) {
@@ -1616,6 +1616,7 @@ final class Md3 {
                 root.setTag(WATCHED, screen);
                 root.getViewTreeObserver().addOnGlobalLayoutListener(screen);
                 root.getViewTreeObserver().addOnPreDrawListener(screen);
+                root.getViewTreeObserver().addOnScrollChangedListener(screen);
             }
             // a switch may have been turned while another screen was up
             screen.rowsSeen = screen.cellsSeen = -1;

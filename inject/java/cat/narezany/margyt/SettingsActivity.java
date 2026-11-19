@@ -339,7 +339,6 @@ public class SettingsActivity extends Activity {
                         Themes.setMaterial(on);
                         Themes.setEnabled(on);
                         markChanged();
-                        rebuildAfterSwitchAnimation();
                     }));
             theme.addView(quiet(Text.THEME_NOTE));
         } else {
@@ -570,17 +569,20 @@ public class SettingsActivity extends Activity {
 
         column.addView(section(BURN));
         LinearLayout burn = card();
+        final LinearLayout burnExtras = new LinearLayout(this);
+        burnExtras.setOrientation(LinearLayout.VERTICAL);
+        burnExtras.addView(line());
+        burnExtras.addView(slider("contrast", Text.DIM_HOW, Dim.strength(), 90, 0, "%", value -> Dim.setStrength(value)));
+        burnExtras.addView(preview("dim", DesignPreview.DIM));
+        burnExtras.addView(line());
+        burnExtras.addView(toggleRow("visibility_off", Text.KEEP_BAR, NavBar.isKept(), NavBar::setKept));
+        burnExtras.setVisibility(Dim.isConfigured() ? View.VISIBLE : View.GONE);
+
         burn.addView(liveToggleRow("eye_open", Text.DIM, Dim.isConfigured(), on -> {
             Dim.setEnabled(on);
-            rebuildAfterSwitchAnimation();
+            burnExtras.setVisibility(on ? View.VISIBLE : View.GONE);
         }));
-        if (Dim.isConfigured()) {
-            burn.addView(line());
-            burn.addView(slider("contrast", Text.DIM_HOW, Dim.strength(), 90, 0, "%", value -> Dim.setStrength(value)));
-            burn.addView(preview("dim", DesignPreview.DIM));
-            burn.addView(line());
-            burn.addView(toggleRow("visibility_off", Text.KEEP_BAR, NavBar.isKept(), NavBar::setKept));
-        }
+        burn.addView(burnExtras);
         burn.addView(quiet(Local.of("Глаз в ленте и на видео включает и выключает затемнение на лету. Поле ввода комментария не затемняется. Нижняя панель при затемнении прячется и возвращается на несколько секунд, если нажать на её место.")));
         column.addView(wrap(burn));
 
@@ -640,19 +642,22 @@ public class SettingsActivity extends Activity {
         messages.addView(line());
         messages.addView(toggleRow("tune", Local.of("MD3 чат"), ChatM3.isEnabled(), ChatM3::setEnabled));
         messages.addView(line());
+        final LinearLayout messageTimesExtra = new LinearLayout(this);
+        messageTimesExtra.setOrientation(LinearLayout.VERTICAL);
+        messageTimesExtra.addView(line());
+        messageTimesExtra.addView(actionRow("schedule", Local.of("Формат времени"), MessageTimes.formatName(), () -> {
+            MessageTimes.nextFormat();
+            rebuild();
+        }));
+        messageTimesExtra.setVisibility(MessageTimes.enabled() ? View.VISIBLE : View.GONE);
+
         messages.addView(liveToggleRow("schedule", Local.of("Время под сообщениями"), MessageTimes.enabled(),
                 on -> {
                     MessageTimes.setEnabled(on);
-                    rebuildAfterSwitchAnimation();
+                    messageTimesExtra.setVisibility(on ? View.VISIBLE : View.GONE);
                 }));
         messages.addView(preview("chat", DesignPreview.CHAT));
-        if (MessageTimes.enabled()) {
-            messages.addView(line());
-            messages.addView(actionRow("schedule", Local.of("Формат времени"), MessageTimes.formatName(), () -> {
-                MessageTimes.nextFormat();
-                rebuild();
-            }));
-        }
+        messages.addView(messageTimesExtra);
         column.addView(wrap(messages));
 
         // what stands in the inbox besides the chats, each piece on its own
@@ -732,9 +737,9 @@ public class SettingsActivity extends Activity {
 
         column.addView(section(Text.NOTIFICATIONS));
         LinearLayout notifications=card();
-        notifications.addView(liveToggleRow("chat",Text.NOTIFY_MESSAGES,ModNotifications.option(0),on->{ModNotifications.set(ModNotifications.MESSAGES,on);rebuildAfterSwitchAnimation();}));
-        notifications.addView(liveToggleRow("notifications",Text.NOTIFY_PROMOS,ModNotifications.option(1),on->{ModNotifications.set(ModNotifications.PROMOS,on);rebuildAfterSwitchAnimation();}));
-        notifications.addView(liveToggleRow("notifications",Text.NOTIFY_OTHER,ModNotifications.option(2),on->{ModNotifications.set(ModNotifications.OTHER,on);rebuildAfterSwitchAnimation();}));
+        notifications.addView(liveToggleRow("chat",Text.NOTIFY_MESSAGES,ModNotifications.option(0),on->ModNotifications.set(ModNotifications.MESSAGES,on)));
+        notifications.addView(liveToggleRow("notifications",Text.NOTIFY_PROMOS,ModNotifications.option(1),on->ModNotifications.set(ModNotifications.PROMOS,on)));
+        notifications.addView(liveToggleRow("notifications",Text.NOTIFY_OTHER,ModNotifications.option(2),on->ModNotifications.set(ModNotifications.OTHER,on)));
         notifications.addView(liveToggleRow("notifications_off",Text.NOTIFY_NO_PROMPTS,ModNotifications.noPrompts(),on->{AccountAppearance.prefs(this).edit().putBoolean(ModNotifications.NO_PROMPTS,on).apply();ModNotifications.reload();}));
         notifications.addView(actionRow("settings",Text.NOTIFY_SETTINGS,null,()->ModNotifications.settings(this)));
         column.addView(wrap(notifications));
@@ -1437,12 +1442,12 @@ public class SettingsActivity extends Activity {
     }
 
     private void rebuildAfterSwitchAnimation() {
-        if (rebuildQueued) column.removeCallbacks(delayedRebuild);
-        else rebuildQueued = true;
-        column.postDelayed(delayedRebuild, M3Switch.ANIMATION_DURATION_MS);
+        // Toggles now update state in-place without tearing down the whole UI.
     }
 
     // ----------------------------------------------------------- the rows
+
+    private View countryHeadRow;
 
     private View switchRow() {
         LinearLayout row = row();
@@ -1451,14 +1456,16 @@ public class SettingsActivity extends Activity {
         row.addView(lead);
         row.addView(label(Text.CHANGE_REGION), grow());
 
+        settingTargets.put(Text.CHANGE_REGION, row);
         final M3Switch toggle = new M3Switch(this);
         toggle.colours(Accent.colour(), skin.muted(), skin.card);
         toggle.setChecked(Margy.isEnabled());
         toggle.setOnChanged(checked -> {
             if (lead instanceof Expressive.Badge) ((Expressive.Badge) lead).set(checked, true);
             Margy.setEnabled(checked);
+            SettingsHome.turnedOn(this, Text.CHANGE_REGION);
             markChanged();
-            rebuildAfterSwitchAnimation();
+            if (countryHeadRow != null) countryHeadRow.setAlpha(checked ? 1f : 0.4f);
         });
         row.addView(toggle);
 
@@ -1471,6 +1478,7 @@ public class SettingsActivity extends Activity {
     private View countryHead() {
         String[] current = Margy.current();
         LinearLayout row = row();
+        countryHeadRow = row;
         row.addView(flag(current[Margy.ISO]));
         row.setAlpha(Margy.isEnabled() ? 1f : 0.4f);
 
@@ -2264,19 +2272,19 @@ public class SettingsActivity extends Activity {
     private void showFeedMd3Settings() {
         Panel panel = Panel.with(this, skin, Local.of("Элементы ленты"));
         panel.text(Local.of("Работает, когда включена «Лента в стиле Material 3». Отключённый элемент остаётся таким, каким его рисует TikTok."));
-        panel.view(toggleRow("tune", Local.of("Подложка под описание"), Md3.partOn(Md3.PART_CAPTION), on -> Md3.setPart(Md3.PART_CAPTION, on)));
-        panel.view(toggleRow("tune", Local.of("Подложка под кнопками справа"), Md3.partOn(Md3.PART_COLUMN), on -> Md3.setPart(Md3.PART_COLUMN, on)));
-        panel.view(toggleRow("tune", Local.of("Сдвиг кнопок, аватара и обложки от края"), Md3.partOn(Md3.PART_SHIFT), on -> Md3.setPart(Md3.PART_SHIFT, on)));
-        panel.view(toggleRow("tune", Local.of("Капсула под вкладками сверху"), Md3.partOn(Md3.PART_TABS), on -> Md3.setPart(Md3.PART_TABS, on)));
-        panel.view(toggleRow("tune", Local.of("Круги у LIVE и поиска"), Md3.partOn(Md3.PART_DISCS), on -> Md3.setPart(Md3.PART_DISCS, on)));
+        panel.view(liveToggleRow("tune", Local.of("Подложка под описание"), Md3.partOn(Md3.PART_CAPTION), on -> Md3.setPart(Md3.PART_CAPTION, on)));
+        panel.view(liveToggleRow("tune", Local.of("Подложка под кнопками справа"), Md3.partOn(Md3.PART_COLUMN), on -> Md3.setPart(Md3.PART_COLUMN, on)));
+        panel.view(liveToggleRow("tune", Local.of("Сдвиг кнопок, аватара и обложки от края"), Md3.partOn(Md3.PART_SHIFT), on -> Md3.setPart(Md3.PART_SHIFT, on)));
+        panel.view(liveToggleRow("tune", Local.of("Капсула под вкладками сверху"), Md3.partOn(Md3.PART_TABS), on -> Md3.setPart(Md3.PART_TABS, on)));
+        panel.view(liveToggleRow("tune", Local.of("Круги у LIVE и поиска"), Md3.partOn(Md3.PART_DISCS), on -> Md3.setPart(Md3.PART_DISCS, on)));
         panel.quiet(Local.of("Закрыть"), null).show();
     }
 
     private void showNavSettings() {
         Panel panel = Panel.with(this, skin, Local.of("Нижняя панель"));
         String[] looks = {
-                Local.of("Капсула"),
-                Local.of("Плавающая с кнопкой «Создать»")};
+                Local.of("Плавающая капсула с кнопкой"),
+                Local.of("Панель Material 3 с пилюлей")};
         for (int i = 0; i < looks.length; i++) {
             final int which = i;
             panel.view(pickRow(looks[i], NavBar.style() == i, null, () -> {
@@ -2286,7 +2294,7 @@ public class SettingsActivity extends Activity {
             }));
         }
         panel.view(toggleRow("label", Local.of("Название открытой вкладки"), NavBar.namesShown(), NavBar::setNamesShown));
-        panel.text(Local.of("Название открытой вкладки показывает капсула. В плавающей панели видны одни иконки."));
+        panel.text(Local.of("Тип A: плавающая капсула с круговым индикатором и отдельной кнопкой «Создать».\nТип B: панель Material 3 с горизонтальной пилюлей активной вкладки."));
         panel.quiet(Local.of("Закрыть"), null).show();
     }
 
@@ -2505,6 +2513,8 @@ public class SettingsActivity extends Activity {
         row.addView(lead);
         row.addView(label(title), grow());
 
+        settingTargets.put(title, row);
+
         TextView beta = new TextView(this);
         beta.setText(Text.BETA);
         beta.setTextColor(onAccent());
@@ -2522,15 +2532,21 @@ public class SettingsActivity extends Activity {
 
         final M3Switch toggle = new M3Switch(this);
         toggle.colours(Accent.colour(), skin.muted(), skin.card);
+        toggle.setContentDescription(title);
         toggle.setChecked(on);
         toggle.setOnChanged(checked -> {
             if (lead instanceof Expressive.Badge) ((Expressive.Badge) lead).set(checked, true);
             setting.set(checked);
+            if (checked) SettingsHome.turnedOn(this, title);
             markChanged();
         });
         LinearLayout.LayoutParams togglePlace = new LinearLayout.LayoutParams(dp(52), dp(32));
         togglePlace.leftMargin = dp(10);
         row.addView(toggle, togglePlace);
+
+        row.setOnClickListener(v -> {
+            toggle.performClick();
+        });
         return sized(row, 52);
     }
 
@@ -3223,7 +3239,7 @@ public class SettingsActivity extends Activity {
         into.addView(toggleRow("tune", Text.DEV_SWITCH, true, on -> {
             if (!on) {
                 DevMode.set(false);
-                rebuildAfterSwitchAnimation();
+                markChanged();
             }
         }));
     }
