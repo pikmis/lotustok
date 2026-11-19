@@ -34,6 +34,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Python dependencies
+        run: pip install pillow
+
       - name: Download Base TikTok APK
         run: |
           echo "Downloading base APK..."
