@@ -53,8 +53,18 @@ class Toolchain:
             return path
         self._say("  fetching %s" % name)
         temporary = path + ".part"
-        with urllib.request.urlopen(url) as response, open(temporary, "wb") as out:
-            shutil.copyfileobj(response, out)
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)"}
+        )
+        try:
+            with urllib.request.urlopen(req) as response, open(temporary, "wb") as out:
+                shutil.copyfileobj(response, out)
+        except Exception:
+            subprocess.run(
+                ["curl", "-fsSL", "--retry", "3", "-A", "Mozilla/5.0", "-o", temporary, url],
+                check=True
+            )
         os.replace(temporary, path)
         return path
 
