@@ -1,5 +1,6 @@
 package cat.narezany.margyt;
 
+import android.content.Context;
 import java.util.Locale;
 
 /**
@@ -13,8 +14,59 @@ final class Text {
 
     private Text() {}
 
-    private static final boolean RU = "ru".equals(language()) || "be".equals(language());
-    private static final boolean UK = "uk".equals(language());
+    private static final String PREFS_KEY = "margyt_language_override";
+
+    static String currentLanguage() {
+        String override = overrideLanguage();
+        if (override != null) return override;
+        try {
+            return Locale.getDefault().getLanguage();
+        } catch (Throwable ignored) {
+            return "en";
+        }
+    }
+
+    private static String overrideLanguage() {
+        Context context = Margy.context();
+        if (context == null) return null;
+        try {
+            return context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).getString(PREFS_KEY, null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    static void setLanguageOverride(String lang) {
+        Context context = Margy.context();
+        if (context == null) return;
+        try {
+            context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).edit().putString(PREFS_KEY, lang).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    static void clearLanguageOverride() {
+        Context context = Margy.context();
+        if (context == null) return;
+        try {
+            context.getSharedPreferences(Margy.PREFS, Context.MODE_PRIVATE).edit().remove(PREFS_KEY).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static boolean isRu() {
+        String lang = currentLanguage();
+        return "ru".equals(lang) || "be".equals(lang);
+    }
+
+    private static boolean isUk() {
+        return "uk".equals(currentLanguage());
+    }
+
+    /** 0 for Russian, 1 for Ukrainian, 2 for everything else: for {@link Local}. */
+    static int language3() {
+        return isRu() ? 0 : isUk() ? 1 : 2;
+    }
     static final String PINNED_FRIENDS=pick("Закреплённые друзья","Закріплені друзі","Pinned friends");
     static final String FRIEND_CANDIDATES=pick("Друзья","Друзі","Friends");
     static final String MOVE_UP=pick("Выше","Вище","Move up");
@@ -221,6 +273,18 @@ final class Text {
             "Restart needed");
 
     static final String RESTART = pick("Перезапустить", "Перезапустити", "Restart");
+
+    // ------------------------------------------------------------------ language switcher
+
+    static final String LANGUAGE = pick("Язык", "Мова", "Language");
+    static final String LANGUAGE_RU = pick("Русский", "Російська", "Russian");
+    static final String LANGUAGE_UK = pick("Українська", "Українська", "Ukrainian");
+    static final String LANGUAGE_EN = pick("Английский", "Англійська", "English");
+    static final String LANGUAGE_SYSTEM = pick("Как в системе", "Як у системі", "System default");
+    static final String LANGUAGE_NOTE = pick(
+            "Язык мода. Перезапуск TikTok не нужен — строки меняются сразу.",
+            "Мова мода. Перезапуск TikTok не потрібен — рядки змінюються одразу.",
+            "The mod's language. No TikTok restart needed — strings change at once.");
 
     // ------------------------------------------------ what TikTok ships off
 
@@ -1459,14 +1523,9 @@ final class Text {
                     "Прозорість змінюється одразу. Якщо іншому налаштуванню потрібен перезапуск, знизу з’явиться кнопка. Звіти про збої вмикаються в «Діагностиці». Це навчання можна відкрити знову в LotusTok.",
                     "Transparency changes at once. When another setting needs a restart, a button appears at the bottom. Crash reports are switched in Diagnostics. You can reopen this tour in LotusTok.")};
 
-    /** 0 for Russian, 1 for Ukrainian, 2 for everything else: for {@link Local}. */
-    static int language3() {
-        return RU ? 0 : UK ? 1 : 2;
-    }
-
     private static String pick(String russian, String ukrainian, String english) {
-        if (RU) return russian;
-        if (UK) return ukrainian;
+        if (isRu()) return russian;
+        if (isUk()) return ukrainian;
         return english;
     }
 }

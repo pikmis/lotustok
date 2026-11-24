@@ -442,6 +442,32 @@ final class DesignPreview extends View {
                 text(canvas, names[i], cx, 806f, 10f, alpha(on, f), i == 0, Paint.Align.CENTER);
             }
         }
+        if (n > 0.01f && NavBar.style() == NavBar.GLASS) {
+            // One iOS capsule: equal tabs, labels, and a glass drop over the chosen one.
+            box.set(16f, 764f, 344f, 812f);
+            fill(alpha(0xBBDDE5EF, n * 0.36f));
+            canvas.drawRoundRect(box, 24f, 24f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.1f);
+            paint.setColor(alpha(0xFFFFFFFF, n * 0.48f));
+            canvas.drawRoundRect(box, 24f, 24f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            box.set(22f, 768f, 81f, 808f);
+            fill(alpha(accent, n * 0.40f));
+            canvas.drawRoundRect(box, 20f, 20f, paint);
+            float[] tabX = {51f, 115f, 180f, 245f, 310f};
+            String[] labels = {Local.of("Главная"), Local.of("Друзья"), "", Local.of("Входящие"), Local.of("Профиль")};
+            for (int i = 0; i < tabX.length; i++) {
+                float x = tabX[i];
+                if (i == 0) house(canvas, x, 781f, 20f, alpha(0xFFFFFFFF, n));
+                else if (i == 4) avatar(canvas, x, 781f, 10f, 0xFFFFFFFF, 0f);
+                else glyph(canvas, i == 1 ? 4 : i == 2 ? 7 : 5, x, 781f, 20f,
+                        alpha(0xFFFFFFFF, n) | 0xFF000000);
+                if (!labels[i].isEmpty()) text(canvas, labels[i], x, 802f, 9.5f,
+                        alpha(0xFFFFFFFF, n), i == 0, Paint.Align.CENTER);
+            }
+            return;
+        }
         // the capsule: separate pieces over the video, the open one wide with its name
         if (n > 0.01f) {
             float[] weight = {2.4f, 1f, 1.3f, 1.3f, 1.3f};

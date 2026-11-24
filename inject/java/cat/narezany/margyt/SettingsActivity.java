@@ -368,6 +368,11 @@ public class SettingsActivity extends Activity {
         }
         column.addView(wrap(fonts));
 
+        column.addView(section(Text.LANGUAGE));
+        LinearLayout lang = card();
+        lang.addView(languageRow());
+        column.addView(wrap(lang));
+
         column.addView(section(Text.GRADIENT));
         column.addView(wrap(gradientCard()));
 
@@ -2160,6 +2165,40 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private View languageRow() {
+        LinearLayout row = row();
+        row.addView(icon("language"));
+        row.addView(label(Text.LANGUAGE), grow());
+
+        String now = Text.currentLanguage();
+        String shown = Text.LANGUAGE_SYSTEM;
+        if ("ru".equals(now) || "be".equals(now)) shown = Text.LANGUAGE_RU;
+        else if ("uk".equals(now)) shown = Text.LANGUAGE_UK;
+        else if ("en".equals(now)) shown = Text.LANGUAGE_EN;
+
+        TextView nowView = detail(shown);
+        nowView.setTextColor(skin.text);
+        row.addView(nowView);
+
+        row.addView(disclosure(false, "languageOpen"));
+        row.setOnClickListener(v -> chooseLanguage());
+        return sized(row, 52);
+    }
+
+    private void chooseLanguage() {
+        String[] choices = {Text.LANGUAGE_SYSTEM, Text.LANGUAGE_RU, Text.LANGUAGE_UK, Text.LANGUAGE_EN};
+        new ModDialog.Builder(this).setItems(choices, (dialog, index) -> {
+            switch (index) {
+                case 0 -> Text.clearLanguageOverride();
+                case 1 -> Text.setLanguageOverride("ru");
+                case 2 -> Text.setLanguageOverride("uk");
+                case 3 -> Text.setLanguageOverride("en");
+            }
+            SettingsActivity.restartOwed();
+            rebuild();
+        }).show();
+    }
+
     // ---------------------------------------------------------- the icon
 
     private View iconHead() {
@@ -2274,9 +2313,9 @@ public class SettingsActivity extends Activity {
 
     private void showNavSettings() {
         Panel panel = Panel.with(this, skin, Local.of("Нижняя панель"));
-        String[] looks = {
-                Local.of("Капсула"),
-                Local.of("Плавающая с кнопкой «Создать»")};
+        String[] looks = android.os.Build.VERSION.SDK_INT >= 31
+                ? new String[] {Local.of("Капсула"), Local.of("Плавающая с кнопкой «Создать»"), Local.of("iOS Liquid Glass")}
+                : new String[] {Local.of("Капсула"), Local.of("Плавающая с кнопкой «Создать»")};
         for (int i = 0; i < looks.length; i++) {
             final int which = i;
             panel.view(pickRow(looks[i], NavBar.style() == i, null, () -> {
@@ -2286,7 +2325,7 @@ public class SettingsActivity extends Activity {
             }));
         }
         panel.view(toggleRow("label", Local.of("Название открытой вкладки"), NavBar.namesShown(), NavBar::setNamesShown));
-        panel.text(Local.of("Название открытой вкладки показывает капсула. В плавающей панели видны одни иконки."));
+        panel.text(Local.of("В капсуле название видно у открытой вкладки. В плавающей панели видны только иконки. В iOS Liquid Glass подписи видны всегда."));
         panel.quiet(Local.of("Закрыть"), null).show();
     }
 
@@ -3941,6 +3980,7 @@ public class SettingsActivity extends Activity {
             case 7: return Local.of("Друзья и чаты");
             case 8: return Text.FUN;
             case 9: return Local.of("Поддержать проект");
+            case 10: return Text.LANGUAGE;
             default: return "LotusTok";
         }
     }
@@ -3960,18 +4000,18 @@ public class SettingsActivity extends Activity {
 
     private View groupNavigation() {
         final ProfileM3.Roles roles = ProfileM3.rolesFor(skin.page);
-        String[] icons = {"palette", "group", "play_circle", "tune", "info", "extension", "chat", "flare", "favorite_border"};
+        String[] icons = {"palette", "group", "play_circle", "tune", "info", "extension", "chat", "flare", "favorite_border", "language"};
         String[] notes = {Local.of("Акцент, тема, шрифты и редактор интерфейса"),
                 Local.of("Значки, градиент, аккаунт и репосты"),
                 Local.of("Просмотр, кнопки, защита экрана и регион"),
                 Local.of("Скачивание, копии и диагностика"),
                 Local.of("Версия, обновления и участники"), Local.of("Магазин и установленные"),
                 Local.of("Сообщения, друзья, серии и уведомления"), Text.FUN_NOTE,
-                Local.of("Бейдж саппортера и реквизиты")};
+                Local.of("Бейдж саппортера и реквизиты"), Local.of("Язык интерфейса")};
         // Shelf order on screen: what people touch daily first, the project itself last.
         // Lite has the shelves that have something on them for it
         // shelf 8 (the fun one) is left out for now
-        int[] shelf = Version.LITE ? new int[] {1, 3, 2, 4, 5, 9} : new int[] {1, 2, 3, 7, 4, 6, 5, 9};
+        int[] shelf = Version.LITE ? new int[] {1, 3, 2, 4, 5, 9, 10} : new int[] {1, 2, 3, 7, 4, 6, 5, 9, 10};
         java.util.List<SettingsHome.Section> list = new java.util.ArrayList<>();
         for (int n = 0; n < shelf.length; n++) {
             final int chosen = shelf[n];

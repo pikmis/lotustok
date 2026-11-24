@@ -51,16 +51,51 @@ final class ProfileM3 {
     static final String KEY = "profile_m3";
     private static final int MINE = 0x7e0c0337, CARD = 0x7e0c0338, ICON = 0x7e0c0339, SKIN = 0x7e0c033a,
             SKIN_AT = 0x7e0c033b, GROUP = 0x7e0c033c, MOVED = 0x7e0c033d;
+    private static final int STAT = 0x7e0c0370, NAME_AT = 0x7e0c0371, MINE_TAG = 0x7e0c0372,
+            GRID = 0x7e0c0373;
+
+    // Caches for the work that used to be redone on every pass. All are touched on the UI thread only.
+    // Resource ids and entry names are stable for the life of the install.
+    private static final java.util.HashMap<String, Integer> IDS = new java.util.HashMap<String, Integer>();
+    private static final java.util.HashMap<Integer, String> NAMES = new java.util.HashMap<Integer, String>();
+    // The palette depends only on the page colour and the accent, both stable while scrolling: a small
+    // LRU keyed on them removes the mixes, the readable loops and the HSV turn from every pass.
+    private static final java.util.LinkedHashMap<Long, Roles> ROLES_CACHE =
+            new java.util.LinkedHashMap<Long, Roles>(16, 0.75f, true) {
+                @Override protected boolean removeEldestEntry(java.util.Map.Entry<Long, Roles> eldest) {
+                    return size() > 8;
+                }
+            };
+    // Discovered views, so the ancestor climbs and the full-page walk are not repeated every pass.
+    private static final java.util.WeakHashMap<View, ViewGroup> PAGES = new java.util.WeakHashMap<View, ViewGroup>();
+    private static final java.util.WeakHashMap<View, java.util.HashMap<String, java.lang.ref.WeakReference<View>>> ROOTS =
+            new java.util.WeakHashMap<View, java.util.HashMap<String, java.lang.ref.WeakReference<View>>>();
+    // Reflection looked up once per class instead of on every time-gated re-tint.
+    private static final java.util.HashMap<Class<?>, java.lang.reflect.Method> TINT_METHODS =
+            new java.util.HashMap<Class<?>, java.lang.reflect.Method>();
+    private static final java.util.HashMap<String, java.lang.reflect.Method> TAB_METHODS =
+            new java.util.HashMap<String, java.lang.reflect.Method>();
+    private static final android.graphics.drawable.ColorDrawable NO_INDICATOR = new android.graphics.drawable.ColorDrawable(0);
+    // One coalesced apply per head: a burst of layout/pre-draw events gives a leading and a trailing
+    // pass, not a full dress every frame (the same shape as Md3.Screen's quiet window).
+    private static final long APPLY_WINDOW = 150L;
+    private static final android.os.Handler APPLY_HANDLER = new android.os.Handler(android.os.Looper.getMainLooper());
+    private static final java.util.WeakHashMap<View, long[]> APPLY_GATE = new java.util.WeakHashMap<View, long[]>();
+    private static Boolean enabledCache;
 
     static boolean isEnabled() {
         if (Version.LITE) return false;
+        if (enabledCache != null) return enabledCache;
         SharedPreferences prefs = prefs();
-        return prefs == null || prefs.getBoolean(KEY, true);
+        boolean on = prefs == null || prefs.getBoolean(KEY, true);
+        enabledCache = on;
+        return on;
     }
 
     static void setEnabled(boolean on) {
         SharedPreferences prefs = prefs();
         if (prefs != null) prefs.edit().putBoolean(KEY, on).apply();
+        enabledCache = on;
     }
 
     private static SharedPreferences prefs() {
@@ -88,6 +123,9 @@ final class ProfileM3 {
 
     /** The same roles for a page of this colour. */
     static Roles rolesFor(int ground) {
+        long key = ((long) ground << 32) | (Accent.colour() & 0xFFFFFFFFL);
+        Roles cached = ROLES_CACHE.get(key);
+        if (cached != null) return cached;
         Roles r = new Roles();
         r.ground = ground | 0xFF000000;
         r.ink = Md3.ink(r.ground);
@@ -109,37 +147,74 @@ final class ProfileM3 {
         int tertiary = android.graphics.Color.HSVToColor(hsv) | 0xFF000000;
         r.tertiaryContainer = NavBar.mix(r.ground, tertiary, r.dark ? 0.32f : 0.24f);
         r.error = r.dark ? 0xFFF2B8B5 : 0xFFB3261E;
+        ROLES_CACHE.put(key, r);
         return r;
     }
 
     // ------------------------------------------------------------------ finding views
 
     private static int id(View view, String name) {
-        return view.getResources().getIdentifier(name, "id", view.getContext().getPackageName());
+        Integer cached = IDS.get(name);
+        if (cached != null) return cached;
+        int found = view.getResources().getIdentifier(name, "id", view.getContext().getPackageName());
+        IDS.put(name, found);
+        return found;
     }
 
     /** The nearest ancestor that holds the head of this profile: the same profile's views, not another page's. */
     private static ViewGroup page(View anchor) {
+        ViewGroup cached = PAGES.get(anchor);
+        if (cached != null && cached.isAttachedToWindow() && above(anchor, cached)) return cached;
         int head = id(anchor, "t7l");
         if (head == 0) return null;
         View up = anchor;
         for (int depth = 0; up != null && depth < 24; depth++) {
-            if (up.getId() == head && up instanceof ViewGroup) return (ViewGroup) up;
+            if (up.getId() == head && up instanceof ViewGroup) {
+                PAGES.put(anchor, (ViewGroup) up);
+                return (ViewGroup) up;
+            }
             View found = up.findViewById(head);
-            if (found instanceof ViewGroup) return (ViewGroup) found;
+            if (found instanceof ViewGroup) {
+                PAGES.put(anchor, (ViewGroup) found);
+                return (ViewGroup) found;
+            }
             android.view.ViewParent next = up.getParent();
             up = next instanceof View ? (View) next : null;
         }
         return null;
     }
 
+    /** Whether maybe is an ancestor of view: a cheap climb, no subtree search. */
+    private static boolean above(View view, View maybe) {
+        View up = view;
+        for (int depth = 0; up != null && depth < 24; depth++) {
+            if (up == maybe) return true;
+            android.view.ViewParent next = up.getParent();
+            up = next instanceof View ? (View) next : null;
+        }
+        return false;
+    }
+
     private static View root(View head, String name) {
         int want = id(head, name);
         if (want == 0) return null;
+        java.util.HashMap<String, java.lang.ref.WeakReference<View>> byName = ROOTS.get(head);
+        if (byName != null) {
+            java.lang.ref.WeakReference<View> ref = byName.get(name);
+            View cached = ref == null ? null : ref.get();
+            if (cached != null && cached.isAttachedToWindow() && cached.getId() == want) return cached;
+        }
         View up = head;
         for (int depth = 0; up != null && depth < 24; depth++) {
             View found = up.findViewById(want);
-            if (found != null) return found;
+            if (found != null) {
+                if (byName == null) {
+                    byName = new java.util.HashMap<String, java.lang.ref.WeakReference<View>>();
+                    ROOTS.put(head, byName);
+                }
+                byName.put(name, new java.lang.ref.WeakReference<View>(found));
+                return found;
+            }
             android.view.ViewParent next = up.getParent();
             up = next instanceof View ? (View) next : null;
         }
@@ -156,13 +231,28 @@ final class ProfileM3 {
     private static void tint(View view, int colour) {
         long now = SystemClock.uptimeMillis();
         Object known = view.getTag(SKIN), at = view.getTag(SKIN_AT);
-        if (Integer.valueOf(colour).equals(known) && at instanceof Long && now - (Long) at < 1000L) return;
+        if (known instanceof Integer && ((Integer) known).intValue() == colour
+                && at instanceof Long && now - (Long) at < 1000L) return;
         view.setTag(SKIN, Integer.valueOf(colour));
         view.setTag(SKIN_AT, Long.valueOf(now));
-        try {
-            view.getClass().getMethod("setTintColor", int.class).invoke(view, colour);
-        } catch (Throwable noMethod) {
-            if (view instanceof ImageView) ((ImageView) view).setColorFilter(colour);
+        Class<?> cls = view.getClass();
+        java.lang.reflect.Method m = TINT_METHODS.get(cls);
+        if (m == null) {
+            try {
+                m = cls.getMethod("setTintColor", int.class);
+            } catch (Throwable noMethod) {
+                m = null;
+            }
+            TINT_METHODS.put(cls, m);
+        }
+        if (m != null) {
+            try {
+                m.invoke(view, colour);
+            } catch (Throwable ignored) {
+                if (view instanceof ImageView) ((ImageView) view).setColorFilter(colour);
+            }
+        } else if (view instanceof ImageView) {
+            ((ImageView) view).setColorFilter(colour);
         }
     }
 
@@ -290,6 +380,41 @@ final class ProfileM3 {
     private static final java.util.WeakHashMap<View, Boolean> WATCHED = new java.util.WeakHashMap<View, Boolean>();
 
     /**
+     * Dress the profile at most once per quiet window, with a trailing pass so the last state is
+     * always applied. Both the layout listener and the pre-draw watcher come through here, keyed on
+     * the head, so a burst of scroll/layout events is one leading and one trailing dress, not a full
+     * pass every frame.
+     */
+    static void applyCoalesced(View anchor) {
+        if (anchor == null || !isEnabled()) return;
+        final ViewGroup head = page(anchor);
+        if (head == null) return;
+        long[] gate = APPLY_GATE.get(head);
+        if (gate == null) {
+            gate = new long[]{0L, 0L};
+            APPLY_GATE.put(head, gate);
+        }
+        long now = SystemClock.uptimeMillis();
+        if (now - gate[0] >= APPLY_WINDOW) {
+            gate[0] = now;
+            apply(head);
+        } else if (gate[1] == 0L) {
+            gate[1] = 1L;
+            final long[] g = gate;
+            final java.lang.ref.WeakReference<ViewGroup> ref = new java.lang.ref.WeakReference<ViewGroup>(head);
+            APPLY_HANDLER.postDelayed(new Runnable() {
+                @Override public void run() {
+                    g[1] = 0L;
+                    ViewGroup h = ref.get();
+                    if (h == null || !h.isAttachedToWindow()) return;
+                    g[0] = SystemClock.uptimeMillis();
+                    apply(h);
+                }
+            }, APPLY_WINDOW - (now - gate[0]) + 1);
+        }
+    }
+
+    /**
      * TikTok paints the numbers' slab again each time they are bound, and puts its other rows into
      * the head after this has been laid out, so the head is looked at again a few times a second for as
      * long as it is on the screen.
@@ -311,11 +436,7 @@ final class ProfileM3 {
                     WATCHED.remove(now);
                     return true;
                 }
-                long at = SystemClock.uptimeMillis();
-                if (at - last >= 150L) {
-                    last = at;
-                    apply(now);
-                }
+                applyCoalesced(now);
                 return true;
             }
         });
@@ -324,6 +445,7 @@ final class ProfileM3 {
     // ------------------------------------------------------------------ the whole page
 
     static void apply(View anchor) {
+        long probe = Probe.start();
         try {
             if (anchor == null || !isEnabled()) return;
             ViewGroup head = page(anchor);
@@ -354,6 +476,8 @@ final class ProfileM3 {
             try { grids(head, unit); } catch (Throwable error) { Diary.detail("profile m3: grid: " + error); }
         } catch (Throwable error) {
             Diary.detail("profile m3: " + error);
+        } finally {
+            Probe.stop(Probe.PROFILE, probe);
         }
     }
 
@@ -538,17 +662,33 @@ final class ProfileM3 {
     }
 
     private static String entry(View view) {
+        int id = view.getId();
+        if (id == View.NO_ID) return "";
+        String cached = NAMES.get(id);
+        if (cached != null) return cached;
+        String name;
         try {
-            return view.getId() == View.NO_ID ? "" : view.getResources().getResourceEntryName(view.getId());
+            name = view.getResources().getResourceEntryName(id);
         } catch (Throwable ignored) {
-            return "";
+            name = "";
         }
+        NAMES.put(id, name);
+        return name;
     }
 
     /** The badges 28dp tall with 6dp between them, and no arrow after the name. */
     private static void tidyName(TextView name, float unit) {
         CharSequence text = name.getText();
         if (!(text instanceof Spannable)) return;
+        // skip the span scan while the name is unchanged, but look again now and then so badges
+        // TikTok adds to the same spannable after this pass are still caught
+        long now = SystemClock.uptimeMillis();
+        Object kept = name.getTag(NAME_AT);
+        if (kept instanceof Object[]) {
+            Object[] c = (Object[]) kept;
+            if (c[0] == text && now - ((Long) c[1]).longValue() < 400L) return;
+        }
+        name.setTag(NAME_AT, new Object[]{text, Long.valueOf(now)});
         Spannable spans = (Spannable) text;
         ImageSpan[] images = spans.getSpans(0, spans.length(), ImageSpan.class);
         boolean changed = false;
@@ -689,6 +829,15 @@ final class ProfileM3 {
         CharSequence text = number.getText();
         int avail = number.getWidth() - number.getPaddingLeft() - number.getPaddingRight();
         if (text == null || text.length() == 0 || avail <= 0) return;
+        // the measure loop is only needed when the number, the width or the size TikTok reset changed
+        Object kept = number.getTag(STAT);
+        if (kept instanceof Object[]) {
+            Object[] c = (Object[]) kept;
+            if (c[0] == text && ((Integer) c[1]).intValue() == avail
+                    && Math.abs(number.getTextSize() - ((Float) c[2]).floatValue()) <= 0.5f) {
+                return;
+            }
+        }
         float step = number.getResources().getDisplayMetrics().scaledDensity;
         float least = 14f * step, size = 26f * step;
         android.text.TextPaint probe = new android.text.TextPaint(number.getPaint());
@@ -697,6 +846,7 @@ final class ProfileM3 {
             size -= step;
             probe.setTextSize(size);
         }
+        number.setTag(STAT, new Object[]{text, Integer.valueOf(avail), Float.valueOf(size)});
         if (Math.abs(number.getTextSize() - size) > 0.5f) {
             number.setTextSize(TypedValue.COMPLEX_UNIT_PX, size);
         }
@@ -722,14 +872,27 @@ final class ProfileM3 {
 
     /** Whether the name on this page is the signed-in account's own. */
     private static boolean mine(View head) {
-        View view = head.findViewById(id(head, "t3h"));
-        String mine = Account.profileHandle();
-        if (!(view instanceof TextView) || mine == null || mine.length() == 0) return false;
+        String account = Account.profileHandle();
+        Object kept = head.getTag(MINE_TAG);
+        Object[] c = kept instanceof Object[] ? (Object[]) kept : null;
+        View view = c != null && c[0] instanceof View && ((View) c[0]).isAttachedToWindow() ? (View) c[0] : null;
+        if (view == null) view = head.findViewById(id(head, "t3h"));
+        if (!(view instanceof TextView) || account == null || account.length() == 0) {
+            head.setTag(MINE_TAG, new Object[]{view, account, null, Boolean.FALSE});
+            return false;
+        }
         CharSequence said = ((TextView) view).getText();
-        if (said == null) return false;
-        String shown = said.toString().trim();
-        if (shown.startsWith("@")) shown = shown.substring(1);
-        return shown.equalsIgnoreCase(mine.startsWith("@") ? mine.substring(1) : mine);
+        if (c != null && account.equals(c[1]) && c[2] == said) {
+            return ((Boolean) c[3]).booleanValue();
+        }
+        boolean result = false;
+        if (said != null) {
+            String shown = said.toString().trim();
+            if (shown.startsWith("@")) shown = shown.substring(1);
+            result = shown.equalsIgnoreCase(account.startsWith("@") ? account.substring(1) : account);
+        }
+        head.setTag(MINE_TAG, new Object[]{view, account, said, Boolean.valueOf(result)});
+        return result;
     }
 
     /** One group of two buttons, 4dp apart: the large one filled with the accent, the small one in its pale container. */
@@ -866,10 +1029,9 @@ final class ProfileM3 {
             holder.setTag(GROUP, Long.valueOf(now));
             // the line TikTok draws under the chosen tab: no height, and nothing to draw it with
             try {
-                holder.getClass().getMethod("setSelectedTabIndicatorHeight", int.class).invoke(holder, 0);
-                holder.getClass().getMethod("setSelectedTabIndicator", android.graphics.drawable.Drawable.class)
-                        .invoke(holder, new android.graphics.drawable.ColorDrawable(0));
-                holder.getClass().getMethod("setSelectedTabIndicatorColor", int.class).invoke(holder, 0);
+                tabMethod(holder, "setSelectedTabIndicatorHeight", int.class).invoke(holder, 0);
+                tabMethod(holder, "setSelectedTabIndicator", android.graphics.drawable.Drawable.class).invoke(holder, NO_INDICATOR);
+                tabMethod(holder, "setSelectedTabIndicatorColor", int.class).invoke(holder, 0);
             } catch (Throwable error) {
                 Diary.detail("profile m3: indicator: " + error);
             }
@@ -901,33 +1063,57 @@ final class ProfileM3 {
         }
     }
 
+    /** A tab-strip method looked up once per class, not on every gated re-hide of the indicator. */
+    private static java.lang.reflect.Method tabMethod(View holder, String name, Class<?> param) throws NoSuchMethodException {
+        String key = holder.getClass().getName() + "#" + name;
+        java.lang.reflect.Method m = TAB_METHODS.get(key);
+        if (m == null) {
+            m = holder.getClass().getMethod(name, param);
+            TAB_METHODS.put(key, m);
+        }
+        return m;
+    }
+
     // ------------------------------------------------------------------ the pictures
 
     /** 16dp from the edge of the screen and 4dp between pictures. */
     private static void grids(ViewGroup head, float unit) {
-        View page = head.getParent() instanceof View ? (View) head.getParent() : null;
-        if (page != null) gridsIn(page, id(head, "ial"), unit, 0);
+        int id = id(head, "ial");
+        if (id == 0) return;
+        Object kept = head.getTag(GRID);
+        ViewGroup grid = kept instanceof ViewGroup ? (ViewGroup) kept : null;
+        if (grid == null || !grid.isAttachedToWindow() || grid.getId() != id) {
+            View page = head.getParent() instanceof View ? (View) head.getParent() : null;
+            grid = findGrid(page, id, 0);
+            if (grid != null) head.setTag(GRID, grid);
+        }
+        if (grid != null) dressGrid(grid, unit);
     }
 
-    private static void gridsIn(View view, int id, float unit, int depth) {
-        if (view == null || depth > 14 || id == 0) return;
-        if (view.getId() == id && view instanceof ViewGroup) {
-            ViewGroup grid = (ViewGroup) view;
-            // 16dp from the edge: 14 here and 2 on each picture, which are 4dp from one another
-            pad(grid, dp(unit, 14f), grid.getPaddingTop(), dp(unit, 14f), grid.getPaddingBottom());
-            if (grid instanceof android.widget.GridView) {
-                android.widget.GridView list = (android.widget.GridView) grid;
-                if (list.getHorizontalSpacing() != 0) list.setHorizontalSpacing(0);
-                if (list.getVerticalSpacing() != 0) list.setVerticalSpacing(0);
-            }
-            for (int i = 0; i < grid.getChildCount(); i++) {
-                margins(grid.getChildAt(i), dp(unit, 2f), dp(unit, 2f), dp(unit, 2f), dp(unit, 2f));
-            }
-            return;
-        }
+    /** The grid once found is kept on the head, so the page is not walked again every pass. */
+    private static ViewGroup findGrid(View view, int id, int depth) {
+        if (view == null || depth > 14) return null;
+        if (view.getId() == id && view instanceof ViewGroup) return (ViewGroup) view;
         if (view instanceof ViewGroup) {
             ViewGroup g = (ViewGroup) view;
-            for (int i = 0; i < g.getChildCount(); i++) gridsIn(g.getChildAt(i), id, unit, depth + 1);
+            for (int i = 0; i < g.getChildCount(); i++) {
+                ViewGroup found = findGrid(g.getChildAt(i), id, depth + 1);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static void dressGrid(ViewGroup grid, float unit) {
+        // 16dp from the edge: 14 here and 2 on each picture, which are 4dp from one another
+        pad(grid, dp(unit, 14f), grid.getPaddingTop(), dp(unit, 14f), grid.getPaddingBottom());
+        if (grid instanceof android.widget.GridView) {
+            android.widget.GridView list = (android.widget.GridView) grid;
+            if (list.getHorizontalSpacing() != 0) list.setHorizontalSpacing(0);
+            if (list.getVerticalSpacing() != 0) list.setVerticalSpacing(0);
+        }
+        for (int i = 0; i < grid.getChildCount(); i++) {
+            margins(grid.getChildAt(i), dp(unit, 2f), dp(unit, 2f), dp(unit, 2f), dp(unit, 2f));
         }
     }
 }

@@ -381,6 +381,11 @@ final class InboxM3 {
         }
 
         private void dressRow(View row) {
+            // the two findViewById are only needed once per row, and again if the chosen shape changes;
+            // the rows are dressed every frame otherwise, which is a search per row per frame for nothing
+            String shape = AvatarShape.chosen();
+            if (shape.equals(row.getTag(STYLED))) return;
+            row.setTag(STYLED, shape);
             View big = idBig == 0 ? null : row.findViewById(idBig);
             View small = idSmall == 0 ? null : row.findViewById(idSmall);
             if (big != null) ProfileM3.avatarShape(big);

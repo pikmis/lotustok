@@ -152,9 +152,9 @@ final class NavBar {
         if (prefs != null) prefs.edit().putBoolean(KEY_NAMES, on).apply();
     }
 
-    /** How the bar looks: the capsule it has been, or the floating one with a round button apart. */
+    /** How the bar looks: connected, floating, or a translucent glass lens. */
     static final String KEY_STYLE = "nav_style";
-    static final int CAPSULE = 0, FLOATING = 1;
+    static final int CAPSULE = 0, FLOATING = 1, GLASS = 2;
     private static volatile int chosen = -1;
 
     static int style() {
@@ -162,13 +162,16 @@ final class NavBar {
         if (known >= 0) return known;
         SharedPreferences prefs = prefs();
         if (prefs == null) return CAPSULE;
-        int value = prefs.getInt(KEY_STYLE, CAPSULE) == CAPSULE ? CAPSULE : FLOATING;
+        int value = prefs.getInt(KEY_STYLE, CAPSULE);
+        if (value != FLOATING && value != GLASS) value = CAPSULE;
+        if (value == GLASS && android.os.Build.VERSION.SDK_INT < 31) value = FLOATING;
         chosen = value;
         return value;
     }
 
     static void setStyle(int style) {
-        style = style == CAPSULE ? CAPSULE : FLOATING;
+        if (style != FLOATING && style != GLASS) style = CAPSULE;
+        if (style == GLASS && android.os.Build.VERSION.SDK_INT < 31) style = FLOATING;
         chosen = style;
         SharedPreferences prefs = prefs();
         if (prefs != null) prefs.edit().putInt(KEY_STYLE, style).apply();
@@ -188,6 +191,21 @@ final class NavBar {
     static boolean wears(View view) {
         Capsule capsule = BARS.get(view);
         return capsule != null && capsule.worn;
+    }
+
+
+    /** A chrome holder can be larger than the tab row itself. */
+    static boolean inside(View ancestor) {
+        for (java.util.Map.Entry<View, Capsule> entry : BARS.entrySet()) {
+            if (!entry.getValue().worn) continue;
+            View view = entry.getKey();
+            for (int depth = 0; view != null && depth < 20; depth++) {
+                if (view == ancestor) return true;
+                android.view.ViewParent parent = view.getParent();
+                view = parent instanceof View ? (View) parent : null;
+            }
+        }
+        return false;
     }
 
     // ----------------------------------------------------------- finding the bar
@@ -436,6 +454,11 @@ final class NavBar {
         private final Paint words = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         private final Paint small = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         private final RectF box = new RectF(), body = new RectF();
+        private WeakReference<View> glassHost = new WeakReference<View>(null);
+        private LiveGlass liveGlass, dropGlass;
+        private boolean glassFailed;
+        private float dropX = Float.NaN;
+        private long dropAt;
         /** The round button apart from the capsule, and everything the bar reaches. */
         private final RectF fab = new RectF(), reach = new RectF();
         private int mode = CAPSULE;
@@ -498,6 +521,7 @@ final class NavBar {
         private static final long READ_EVERY = 250L;
 
         void settle(ViewGroup bar) {
+            glassHost = new WeakReference<View>(bar);
             long now = SystemClock.uptimeMillis();
             boolean changed = gather(bar);
             boolean moving = false;
@@ -675,16 +699,20 @@ final class NavBar {
         /** What was painted behind the bar by the views around it, put away so the page shows through. */
         private final java.util.ArrayList<View> bared = new java.util.ArrayList<>();
         private final java.util.ArrayList<Drawable> baredWas = new java.util.ArrayList<>();
+        private final java.util.WeakHashMap<View, Integer> hiddenInboxSpacers = new java.util.WeakHashMap<>();
+        private long spacerScanAt;
 
         /**
          * The floating bar lies on the page, so a plain strip the page paints under it (the bar's holder, or
          * a view as wide as the bar lying where it does) is taken away, and given back with the bar.
          */
         private void clear(ViewGroup bar) {
-            if (mode != FLOATING) {
+            if (mode == CAPSULE) {
                 unclear();
                 return;
             }
+            if (mode == GLASS) mergeContent(bar);
+            else restoreSpacers();
             android.view.ViewParent parent = bar.getParent();
             if (!(parent instanceof ViewGroup)) return;
             ViewGroup holder = (ViewGroup) parent;
@@ -697,8 +725,8 @@ final class NavBar {
             for (int i = 0; i < holder.getChildCount(); i++) {
                 View child = holder.getChildAt(i);
                 if (child == bar || child.getVisibility() != View.VISIBLE) continue;
-                if (child.getWidth() < bar.getWidth() * 0.9f || child.getHeight() > 130 * unit) continue;
-                if (child.getTop() < bar.getTop() - 2 * unit) continue;
+                if (child.getWidth() < bar.getWidth() * 0.9f || child.getHeight() > 220 * unit) continue;
+                if (child.getBottom() < bar.getTop() - 2 * unit || child.getTop() > bar.getBottom()) continue;
                 take(child);
             }
             // the filler TikTok lays under the bar, over the strip the gesture line is in: a view as wide as
@@ -711,27 +739,71 @@ final class NavBar {
                 for (int i = 0; i < level.getChildCount(); i++) {
                     View child = level.getChildAt(i);
                     if (child.getVisibility() != View.VISIBLE || child.getWidth() < bar.getWidth() * 0.9f
-                            || child.getHeight() > 64 * unit || child.getBackground() == null) continue;
+                            || child.getHeight() > 160 * unit || child.getBackground() == null) continue;
                     child.getLocationInWindow(other);
-                    if (other[1] >= floor - 2 * unit) take(child);
+                    if (other[1] <= floor && other[1] + child.getHeight() >= at[1] - 2 * unit) take(child);
                 }
             }
         }
 
         private void take(View view) {
             Drawable paint = view.getBackground();
-            if (paint == null || bared.contains(view)) return;
-            bared.add(view);
-            baredWas.add(paint);
+            if (paint == null) return;
+            int known = bared.indexOf(view);
+            if (known >= 0) baredWas.set(known, paint);
+            else { bared.add(view); baredWas.add(paint); }
             view.setBackground(null);
         }
 
         private void unclear() {
+            restoreSpacers();
             for (int i = 0; i < bared.size(); i++) {
                 if (bared.get(i).getBackground() == null) bared.get(i).setBackground(baredWas.get(i));
             }
             bared.clear();
             baredWas.clear();
+        }
+
+        /** The inbox list can fill its reserved row without moving feed controls. */
+        private void mergeContent(ViewGroup bar) {
+            long now = SystemClock.uptimeMillis();
+            if (now - spacerScanAt < 250L) return;
+            spacerScanAt = now;
+            android.view.ViewParent parent = bar.getParent();
+            if (!(parent instanceof ViewGroup)) return;
+            ViewGroup holder = (ViewGroup) parent;
+            int[] at = new int[2];
+            bar.getLocationInWindow(at);
+            // On this TikTok build the inbox fragment's explicit bottom spacer is `cha`.
+            // Look inside the active page, since it is several levels below the bar's holder.
+            for (String name : new String[] {"cha"}) {
+                int spacerId = bar.getResources().getIdentifier(name, "id", bar.getContext().getPackageName());
+                if (spacerId == 0) continue;
+                for (int i = 0; i < holder.getChildCount(); i++) {
+                    View page = holder.getChildAt(i);
+                    if (page == bar) continue;
+                    View spacer = page.findViewById(spacerId);
+                    if (spacer != null && clearSpacerCandidate(spacer, bar.getWidth(), bar.getHeight(), at[1]))
+                        return;
+                }
+            }
+        }
+
+        private boolean clearSpacerCandidate(View view, int width, int height, int top) {
+            if (view.getVisibility() != View.VISIBLE || view.getWidth() < width * 0.9f
+                    || Math.abs(view.getHeight() - height) > 2) return false;
+            int[] at = new int[2];
+            view.getLocationInWindow(at);
+            if (Math.abs(at[1] - top) > 2) return false;
+            if (!hiddenInboxSpacers.containsKey(view)) hiddenInboxSpacers.put(view, view.getVisibility());
+            view.setVisibility(View.GONE);
+            return true;
+        }
+
+        private void restoreSpacers() {
+            for (java.util.Map.Entry<View, Integer> entry : hiddenInboxSpacers.entrySet())
+                entry.getKey().setVisibility(entry.getValue());
+            hiddenInboxSpacers.clear();
         }
 
         /** The mod's bar was switched off: TikTok's is given back as it was. */
@@ -899,7 +971,11 @@ final class NavBar {
                 bottom = tall;
             }
             // the floating toolbar is 64dp tall where the bar has the room, and keeps 12dp from the sides
-            if (mode != CAPSULE) {
+            if (mode == GLASS) {
+                arrangeGlass(top, bottom);
+                return;
+            }
+            if (mode == FLOATING) {
                 arrangeBar(top, bottom);
                 return;
             }
@@ -919,6 +995,21 @@ final class NavBar {
                 share(centre + 1, tabs.length, tabs[centre].right, right);
             } else {
                 share(0, tabs.length, left, right);
+            }
+        }
+
+        /** The iOS tab bar is one floating lens with five equal touch areas. */
+        private void arrangeGlass(float top, float bottom) {
+            fab.setEmpty();
+            float height = Math.max(42f * unit, Math.min(48f * unit, bottom - top - 2f * unit));
+            float middle = (top + bottom) / 2f;
+            body.set(16f * unit, middle - height / 2f, wide - 16f * unit, middle + height / 2f);
+            reach.set(body.left - 2f * unit, body.top - 12f * unit, body.right + 2f * unit, body.bottom + 12f * unit);
+            float left = body.left + 4f * unit;
+            float column = (body.width() - 8f * unit) / tabs.length;
+            for (int i = 0; i < tabs.length; i++) {
+                tabs[i].left = left + column * i;
+                tabs[i].right = left + column * (i + 1);
             }
         }
 
@@ -980,14 +1071,14 @@ final class NavBar {
         private void place() {
             // with a round button apart from the capsule, the capsule's own last tab is the one before it
             int last = tabs.length - 1;
-            if (mode == FLOATING && !fab.isEmpty()) while (last > 0 && tabs[last].kind == CREATE) last--;
+            if (mode != CAPSULE && !fab.isEmpty()) while (last > 0 && tabs[last].kind == CREATE) last--;
             for (int i = 0; i < tabs.length; i++) {
                 Tab tab = tabs[i];
                 View view = tab.view;
                 if (view.getWidth() <= 0) continue;
                 // the margins of the bar belong to the tabs at its ends
                 float left = i == 0 ? 0f : tab.left, right = i == tabs.length - 1 ? wide : tab.right;
-                if (mode == FLOATING) {
+                if (mode != CAPSULE) {
                     left = i == 0 ? body.left : tab.left;
                     right = i == last && tab.kind != CREATE ? body.right : tab.right;
                 }
@@ -1008,6 +1099,11 @@ final class NavBar {
             if (tabs.length == 0 || body.isEmpty() || away >= 1f) return;
             int veil = away > 0f ? canvas.saveLayerAlpha(reach.left, reach.top, reach.right, reach.bottom,
                     Math.round(255f * (1f - away))) : -1;
+            if (mode == GLASS) {
+                drawIos(canvas);
+                if (veil >= 0) canvas.restoreToCount(veil);
+                return;
+            }
             int idle = shown[IDLE], pill = shown[PILL], lit = shown[LIT], quiet = shown[QUIET], primary = shown[PRIMARY];
 
             // the buttons are 48dp tall, as many as fit of the 8dp it would like round them
@@ -1015,7 +1111,7 @@ final class NavBar {
 
             float middle = body.centerY(), icon = 24f * unit, gap = 6f * unit;
             // what the buttons lie in: the capsule bar has nothing, the floating one a capsule of its own
-            if (mode == FLOATING) {
+            if (mode != CAPSULE) {
                 fill.setColor(idle);
                 canvas.drawRoundRect(body, body.height() / 2f, body.height() / 2f, fill);
             }
@@ -1027,7 +1123,7 @@ final class NavBar {
                             Math.round(tab.shown * 255f));
                 }
                 float centre = (tab.left + tab.right) / 2f;
-                if (tab.kind == CREATE && mode == FLOATING) {
+                if (tab.kind == CREATE && mode != CAPSULE) {
                     // the large button apart from the capsule
                     allCorners(fab.width() * 0.35f);
                     create(canvas, fab, primary, tab.pressed, fab.width() * 0.125f);
@@ -1039,8 +1135,8 @@ final class NavBar {
                     create(canvas, box, primary, tab.pressed);
                 } else {
                     // a name too long for its tab is set a little smaller before it is cut short
-                    boolean names = namesShown() && mode != FLOATING;
-                    float badge = mode == FLOATING ? 0f : badge(tab);
+                    boolean names = namesShown() && mode == CAPSULE;
+                    float badge = mode == CAPSULE ? badge(tab) : 0f;
                     float room = Math.max(0f, tab.right - tab.left - 2f * 8f * unit - icon - gap - badge);
                     float shrink = tab.name == null || tab.nameWide <= room ? 1f : Math.max(0.82f, room / tab.nameWide);
                     float text = tab.name == null || !names ? 0f : Math.min(tab.nameWide * shrink, room);
@@ -1056,7 +1152,7 @@ final class NavBar {
                         fill.setColor(mix(idle, pill, tab.open));
                         shape(canvas, box, fill);
                     } else {
-                        // the floating bar: a round indicator behind the open tab, nothing behind the rest
+                        // floating styles: a round indicator follows the open tab
                         float high = Math.min(48f * unit, body.height() - 8f * unit);
                         float half = Math.min((tab.right - tab.left) / 2f - 2f * unit, 32f * unit);
                         box.set(centre - half, middle - high / 2f, centre + half, middle + high / 2f);
@@ -1094,7 +1190,7 @@ final class NavBar {
                     if (tab.count != null) {
                         // on the corner of the icon while the tab is shut, and after its name once
                         // it is open, where it is not over the first letters of it
-                        float spread = mode == FLOATING ? 0f : tab.open;
+                        float spread = mode == CAPSULE ? tab.open : 0f;
                         float high = 16f * unit;
                         float shutLeft = start + icon - 9f * unit, shutUp = Math.max(body.top + unit, middle - icon / 2f - 5f * unit);
                         float openLeft = start + icon + between + text + 4f * unit, openUp = middle - high / 2f;
@@ -1106,6 +1202,111 @@ final class NavBar {
                 if (saved >= 0) canvas.restoreToCount(saved);
             }
             if (veil >= 0) canvas.restoreToCount(veil);
+        }
+
+        /** Live glass behind the whole iOS bar, with a refracting lens over the selected tab. */
+        private void drawIos(Canvas canvas) {
+            View host = glassHost.get();
+            if (host == null) return;
+            Tab chosen = null;
+            for (Tab tab : tabs) if (tab.view.isSelected() && tab.kind != CREATE) { chosen = tab; break; }
+            if (chosen != null) {
+                float goal = (chosen.left + chosen.right) / 2f;
+                long now = SystemClock.uptimeMillis();
+                float dt = dropAt == 0 ? 16f : Math.min(64f, now - dropAt);
+                dropAt = now;
+                if (Float.isNaN(dropX)) dropX = goal;
+                else dropX += (goal - dropX) * (1f - (float) Math.exp(-dt / 90f));
+                if (Math.abs(goal - dropX) > 0.5f) host.postInvalidateOnAnimation();
+                else dropX = goal;
+            }
+            drawIosBar(canvas, host);
+        }
+
+        private void drawIosBar(Canvas canvas, View host) {
+            float radius = body.height() / 2f;
+            if (liveGlass == null && LiveGlass.available() && !glassFailed) liveGlass = new LiveGlass();
+            boolean drawn = false;
+            if (liveGlass != null) {
+                int save = canvas.save();
+                try {
+                    canvas.translate(body.left, body.top);
+                    drawn = liveGlass.draw(canvas, host, body.left, body.top, body.width(), body.height(),
+                            radius, radius, (ground & 0xFFFFFF) | 0x2E000000, true);
+                } catch (Throwable error) {
+                    glassFailed = true;
+                    liveGlass = null;
+                    Diary.detail("iOS nav glass: " + error);
+                } finally { canvas.restoreToCount(save); }
+            }
+            if (!drawn) {
+                fill.setColor((ground & 0xFFFFFF) | 0xB0000000);
+                canvas.drawRoundRect(body, radius, radius, fill);
+            }
+            if (!Float.isNaN(dropX)) {
+                float half = (body.width() - 8f * unit) / tabs.length / 2f - 2f * unit;
+                box.set(dropX - half, body.top + 4f * unit, dropX + half, body.bottom - 4f * unit);
+                if (dropGlass == null && LiveGlass.available() && !glassFailed) dropGlass = new LiveGlass();
+                boolean lens = false;
+                if (dropGlass != null) {
+                    int save = canvas.save();
+                    try {
+                        canvas.translate(box.left, box.top);
+                        lens = dropGlass.draw(canvas, host, box.left, box.top, box.width(), box.height(),
+                                box.height() / 2f, box.height() / 2f,
+                                (accent & 0xFFFFFF) | 0x22000000, true);
+                    } catch (Throwable error) {
+                        glassFailed = true;
+                        dropGlass = null;
+                        Diary.detail("iOS nav lens: " + error);
+                    } finally { canvas.restoreToCount(save); }
+                }
+                if (!lens) {
+                    fill.setColor((accent & 0xFFFFFF) | 0x26000000);
+                    canvas.drawRoundRect(box, box.height() / 2f, box.height() / 2f, fill);
+                }
+            }
+            float icon = 23f * unit, label = sp(10.5f);
+            int quiet = Md3.ink(ground), lit = NavBar.readable(accent, ground, quiet, 4.5f);
+            for (Tab tab : tabs) {
+                int saved = tab.shown < 0.99f ? canvas.saveLayerAlpha(tab.left, body.top, tab.right, body.bottom,
+                        Math.round(tab.shown * 255f)) : -1;
+                float centre = (tab.left + tab.right) / 2f;
+                if (tab.kind == CREATE) {
+                    float arm = 8f * unit;
+                    line.setColor(quiet);
+                    line.setStrokeWidth(2.6f * unit);
+                    line.setStrokeCap(Paint.Cap.ROUND);
+                    canvas.drawLine(centre - arm, body.centerY(), centre + arm, body.centerY(), line);
+                    canvas.drawLine(centre, body.centerY() - arm, centre, body.centerY() + arm, line);
+                    line.setStrokeCap(Paint.Cap.BUTT);
+                } else {
+                    boolean named = tab.name != null && !tab.name.isEmpty();
+                    float iconTop = named ? body.centerY() - (icon + label + 2f * unit) / 2f
+                            : body.centerY() - icon / 2f;
+                    int colour = tab.view.isSelected() ? lit : quiet;
+                    emblem(canvas, tab, centre - icon / 2f, iconTop, icon, colour);
+                    if (named) {
+                        words.setTextSize(label);
+                        words.setColor(colour);
+                        words.setAlpha(255);
+                        String name = tab.name;
+                        float room = tab.right - tab.left - 4f * unit;
+                        if (words.measureText(name) > room) {
+                            int keep = words.breakText(name, true, room - words.measureText("…"), null);
+                            name = name.substring(0, Math.max(0, keep)) + "…";
+                        }
+                        Paint.FontMetrics metrics = words.getFontMetrics();
+                        canvas.drawText(name, centre - words.measureText(name) / 2f,
+                                iconTop + icon + 2f * unit - metrics.ascent, words);
+                        words.setTextSize(sp(14f));
+                    }
+                    if (tab.count != null) number(canvas, tab.count, centre + icon / 2f - 6f * unit,
+                            iconTop - 4f * unit, ground);
+                    else if (tab.dot) spot(canvas, centre + icon / 2f - 2f * unit, iconTop + 3f * unit, ground);
+                }
+                if (saved >= 0) canvas.restoreToCount(saved);
+            }
         }
 
         /** The icon of a tab: one of the mod's, or TikTok's own for a tab the mod has none for. */
